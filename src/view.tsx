@@ -1,4 +1,5 @@
-import { onCleanup } from 'solid-js'
+import { onMount, onCleanup } from 'solid-js'
+import VStaff from 'vstaff'
 
 function unbindable(
   el: EventTarget,
@@ -22,6 +23,29 @@ export const App = solsido => props => {
 
   return (<>
       <solsido ref={_ => setTimeout(() => solsido.ref.$ref = _)}>
+        <KeySignatures/>
       </solsido>
      </>)
+}
+
+
+const KeySignatures = props => {
+
+  return (<>
+    <h2> Key Signatures </h2>
+
+    <CMajor/>
+    </>)
+}
+
+
+const CMajor = props => {
+  let $ref
+
+  onMount(() => {
+    VStaff($ref)
+  })
+
+  return (<div ref={$ref} class='cmajor'>
+    </div>)
 }
