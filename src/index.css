@@ -73,9 +73,16 @@ solsido {
 .playback .cursor {
   position: absolute;
   width: 0.5em;
-  border-right: 1px solid hsla(50, 90%, 60%, 1);
   background: hsla(50, 90%, 70%, 0.5);
   height: 100%;
+}
+
+.playback .cursor:before {
+  position: absolute;
+  content: ' ';
+  width: 1em;
+  height: 100%;
+  border-right: 0.06em solid hsla(50, 90%, 60%, 1);
 }
 
 
