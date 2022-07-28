@@ -58,6 +58,14 @@ const CMajor = props => {
     createEffect(() => {
       api.bras = props.major.bras
     })
+
+    createEffect(() => {
+      api.xwi = props.major.xwi
+    })
+
+    createEffect(() => {
+        api.playback = props.major.playback 
+     })
   })
 
   let _show_controls = createSignal(false)
@@ -76,11 +84,6 @@ const CMajor = props => {
       </div>
       <div class="major-staff">
         <div ref={$ref}> </div>
-        <Show when={props.major.playback}>{cursor =>
-          <div class='playback'>
-            <span style={cursor.style} class='cursor'></span>
-          </div>
-        }</Show>
       </div>
     </div>)
 }

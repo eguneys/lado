@@ -21,59 +21,57 @@ export default class Solsido {
 
 const make_playback = (solsido: Solsido) => {
 
-  let _x = createSignal(0)
-  let _bras = createSignal()
+  let _major = createSignal()
+
+  let m_bras = createMemo(() => read(_major)?.bras)
 
   let m_off_bras = createMemo(() => {
-    let bras = read(_bras)
+    let bras = m_bras()
     if (bras) {
-      return 1.5 
+      let _ = bras.find(_ => _.match('whole_note'))
+
+      let [__,rest] = _.split('@')
+
+      return parseInt(rest.split(',')[0])
     }
     return 0
   })
 
-  let bpm = 20
+  let bpm = 120
   let note_per_beat = 2
 
   let note_p_m = bpm * note_per_beat
   let note_p_ms = note_p_m / 60 / 1000
   let ms_p_note = 1 / note_p_ms
 
-  createEffect(on(_bras[0], v => {
+  createEffect(on(_major[0], v => {
     if (v) {
 
-      owrite(_x, 0)
+      let x = 0
       let _i = 0
       let cancel = loop((dt: number, dt0: number) => {
         _i += dt
 
         if (_i >= ms_p_note) {
           _i -= ms_p_note
-          owrite(_x, _ => (_ + 1) % 8)
+          x = (x + 1) % 8
         }
+
+        v.xwi = `${m_off_bras() + x * 1.3},1.2,${(_i/ms_p_note) * 100}`
       })
       onCleanup(() => {
         cancel()
-
-        console.log('done')
+        //console.log('done')
       })
     }
   }))
 
-  let m_style = createMemo(() => ({
-    transform: `translate(${read(_x)*1.3+m_off_bras()}em, 0)`,
-    width: `1.2em`
-  }))
-
   return {
-    play_bras(bras: Bras) {
-      owrite(_bras, bras)
+    play_major(major: Major) {
+      owrite(_major, major)
     },
-    stop_bras(bras) {
-      owrite(_bras, _ => _ === bras ? undefined : _)
-    },
-    get style() {
-      return m_style()
+    stop_major(major: Major) {
+      owrite(_major, _ => _ === major ? undefined : _)
     },
     set_play(major: Major) {
       solsido._majors.majors.forEach(_ => _.set_play(_ === major))
@@ -142,18 +140,9 @@ const make_major = (solsido: Solsido, _major: Major) => {
 
   let _playback = createSignal(false)
 
+  let _xwi = createSignal('0,0,0')
 
-  createEffect(on(_playback[0], (v, p) => {
-    if (v) {
-      solsido.major_playback.play_bras(_bras)
-    } else {
-      if (!!p) {
-        solsido.major_playback.stop_bras(_bras)
-      }
-    }
-  }))
-
-  return {
+  let self = {
     key,
     get letter() {
       return key[0]
@@ -174,11 +163,28 @@ const make_major = (solsido: Solsido, _major: Major) => {
       owrite(_playback, _ => v ? !_ : false)
     },
     get playback() {
-      if (read(_playback)) {
-        return solsido.major_playback
-      }
+      return read(_playback)
+    },
+    set xwi(xwi: XWI) {
+      owrite(_xwi, xwi)
+    },
+    get xwi() {
+      return read(_xwi)
     }
   }
+
+  createEffect(on(_playback[0], (v, p) => {
+    if (v) {
+      solsido.major_playback.play_major(self)
+    } else {
+      if (!!p) {
+        solsido.major_playback.stop_major(self)
+      }
+    }
+  }))
+
+
+  return self
 }
 
 const make_majors = (solsido: Solsido) => {
