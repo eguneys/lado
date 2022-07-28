@@ -45,6 +45,10 @@ const KeySignatures = props => {
         <CMajor {...props} major={props.solsido._majors.major('Bflat')}/>
         <CMajor {...props} major={props.solsido._majors.major('D')}/>
       </div>
+      <div>
+        <CMajor {...props} major={props.solsido._majors.major('F#')}/>
+      </div>
+
     </div>
     </>)
 }

@@ -2,6 +2,7 @@ import { onCleanup, on, createEffect, createSignal, createMemo, mapArray } from 
 import { make_ref } from './make_sticky'
 import { read, write, owrite } from './play'
 import { loop } from './play'
+import { uci_note, PlayerController } from 'aplayer'
 
 export default class Solsido {
 
@@ -32,10 +33,21 @@ const make_playback = (solsido: Solsido) => {
 
       let [__,rest] = _.split('@')
 
-      return parseInt(rest.split(',')[0])
+      return parseFloat(rest.split(',')[0])
     }
     return 0
   })
+
+  let player = new PlayerController()
+  let synth = {
+    wave: 'triangle',
+    volume: 1,
+    amplitude: 0.2,
+    cutoff: 0.6,
+    cutoff_max: 0.2,
+    amp_adsr: { a: 0.02, d: 0.08, s: 0.3, r: 0.01 },
+    filter_adsr: { a: 0, d: 0.08, s: 0.02, r: 0 }
+  }
 
   let bpm = 120
   let note_per_beat = 2
@@ -47,21 +59,29 @@ const make_playback = (solsido: Solsido) => {
   createEffect(on(_major[0], v => {
     if (v) {
 
-      let x = 0
+      let x = -1
       let _i = 0
+
+      let _x, _w
       let cancel = loop((dt: number, dt0: number) => {
         _i += dt
 
         if (_i >= ms_p_note) {
           _i -= ms_p_note
-          x = (x + 1) % 8
+          x = (x + 1) % 8;
+
+          [_x, _w] = v.xw_at(x)
+          let id = player.attack(synth, uci_note(v.notes[x]))
+          player.release(id, player.currentTime + (ms_p_note - _i)/1000)
         }
 
-        v.xwi = `${m_off_bras() + x * 1.3},1.2,${(_i/ms_p_note) * 100}`
+        if (x > -1) {
+          v.xwi = `${_x},${_w},${(_i/ms_p_note) * 100}`
+        }
       })
       onCleanup(() => {
         cancel()
-        //console.log('done')
+        v.xwi = `0,0,0`
       })
     }
   }))
@@ -88,24 +108,26 @@ let flat_majors = [
 
 let sharp_majors = [
   'G Major',
-  'D Major'
+  'D Major',
+  'F# Major'
 ]
 
 let flats = {
-  'F Major': ['f4', 'b5'],
-  'Bflat Major': ['b4', 'b5', 'e5'],
+  'F Major': ['f4', 'b4'],
+  'Bflat Major': ['b3', 'b4', 'e5'],
 }
 
 let sharps = {
   'G Major': ['g4', 'f5'],
-  'D Major': ['d4', 'f5', 'c5']
+  'D Major': ['d4', 'f5', 'c5'],
+  'F# Major': ['f4', 'f5', 'c5', 'g5', 'd5', 'a4', 'e5']
 }
 
 let increasing = [...Array(8).keys()].map(_ => _ * 0.125)
 
-let notes = ['c4', 'd4', 'e4', 'f4', 'g4', 'a5', 'b5', 'c5', 'd5', 'e5', 'f5', 'g5']
+let notes = ['b3', 'c4', 'd4', 'e4', 'f4', 'g4', 'a4', 'b4', 'c5', 'd5', 'e5', 'f5', 'g5']
 
-const note_y = note => 0.5 - notes.indexOf(note) * 0.125
+const note_y = note => 0.625 - notes.indexOf(note) * 0.125
 
 const flat_bras = key => {
   let [note, ..._flats] = flats[key]
@@ -118,15 +140,34 @@ const flat_bras = key => {
 
 const sharp_bras = key => {
   let [note, ..._sharps] = sharps[key]
+  let i_wnote = _sharps.length
+  let g_wnote = 1.3 - (i_wnote / 8) * 0.3
   return [
     'gclef@0.2,0',
     ..._sharps.map((_, i) => `sharp_accidental@${i*0.3+1.2},${note_y(_)}`),
 
-    ...increasing.map((_, i) => `whole_note@${i*1.3+2},${note_y(note) - _}`)]
+    ...increasing.map((_, i) => `whole_note@${i*g_wnote+1.5 + i_wnote * 0.3},${note_y(note) - _}`)]
 }
 
 const cmajor_bras = [
   'gclef@0.2,0', ...increasing.map((_, i) => `whole_note@${i*1.3+1.5},${note_y('c4')-_}`)]
+
+const octave_notes = (note: string) => notes.slice(notes.indexOf(note), notes.indexOf(note) + 8)
+
+const cmajor_notes = octave_notes('c4')
+const flat_notes = key => {
+  let [note, ..._flats] = flats[key]
+  let _notes = octave_notes(note)
+
+  return _notes.map(_ => _flats.includes(_) ? _ + 'f' : _)
+} 
+
+const sharp_notes = key => {
+  let [note, ..._sharps] = sharps[key]
+  let _notes = octave_notes(note)
+
+  return _notes.map(_ => _sharps.includes(_) ? _ + '#' : _)
+} 
 
 const make_major = (solsido: Solsido, _major: Major) => {
 
@@ -137,6 +178,7 @@ const make_major = (solsido: Solsido, _major: Major) => {
   let _sharp_major = sharp_majors.includes(_major)
 
   let _bras = _c_major ? cmajor_bras : _flat_major ? flat_bras(_major) : sharp_bras(_major)
+  let _notes = _c_major ? cmajor_notes : _flat_major ? flat_notes(_major) : sharp_notes(_major)
 
   let _playback = createSignal(false)
 
@@ -155,6 +197,26 @@ const make_major = (solsido: Solsido, _major: Major) => {
     },
     get bras() {
       return _bras
+    },
+    get notes() {
+      return _notes
+    },
+    xw_at(x: number) {
+
+      let i_n = _bras.findIndex(_ => _.match('whole_note'))
+
+      let _i = 0
+      let i_x = _bras.findIndex(_ => _.match('whole_note') && _i++ === x)
+
+      let i_n1 = _bras[i_n],
+        i_n2 = _bras[i_n+1],
+        i_nx = _bras[i_x]
+
+      let x1 = i_n1.split('@')[1].split(',')[0],
+        x2 = i_n2.split('@')[1].split(',')[0],
+        xx = i_nx.split('@')[1].split(',')[0]
+
+      return [parseFloat(xx), parseFloat(x2)-parseFloat(x1)]
     },
     get play() {
       return read(_playback) ? 'stop' :'play'
