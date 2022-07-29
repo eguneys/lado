@@ -1,11 +1,13 @@
 import { Midi, midi_note_octave } from './midi'
 import { loop } from './play'
 
+let midi = new Midi().init()
+
 export const make_midi = (hooks: Hooks) => {
   
-  let midi = new Midi().init()
+  midi.clear()
 
-  loop((dt: number, dt0: number) => {
+  let clear = loop((dt: number, dt0: number) => {
 
     let { just_ons, just_offs } = midi
 
@@ -19,4 +21,12 @@ export const make_midi = (hooks: Hooks) => {
 
     midi.update(dt, dt0)
   })
+
+
+  return {
+    dispose() {
+      midi.clear()
+      clear()
+    }
+  }
 }

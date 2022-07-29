@@ -18,6 +18,9 @@ export const midi_note_octave = (note: number) => {
 
 export class Midi {
 
+  clear() {
+    this._jpr = new Map()
+  }
 
   _jpr: Map<Note, JPR> = new Map()
 

@@ -2,7 +2,7 @@ import { onCleanup, on, createEffect, createSignal, createMemo, mapArray } from 
 import { make_ref } from './make_sticky'
 import { read, write, owrite } from './play'
 import { loop } from './play'
-import { uci_note, PlayerController } from 'aplayer'
+import { uci_note, PlayerController } from './audio'
 import { make_midi } from './make_midi'
 
 export default class Solsido {
@@ -24,19 +24,35 @@ export default class Solsido {
 
 const make_you = (solsido: Solsido) => {
 
-  let midi = make_midi({
-    just_ons(ons: Array<Note>) {
-      console.log(ons)
-    },
-    just_offs(offs: Array<Note>) {
-    }
-  })
   let _major = createSignal()
 
+  let player = new PlayerController()
+  let synth = {
+    wave: 'sine',
+    volume: 1,
+    amplitude: 0.2,
+    cutoff: 0.6,
+    cutoff_max: 0.2,
+    amp_adsr: { a: 0.02, d: 0.08, s: 0.3, r: 0.01 },
+    filter_adsr: { a: 0, d: 0.08, s: 0.02, r: 0 }
+  }
 
   createEffect(on(_major[0], v => {
     if (v) {
+
+      let ids = {}
+
+      let midi = make_midi({
+        just_ons(ons: Array<Note>) {
+          ons.forEach(_ => ids[_] = 
+                      player.attack(synth, uci_note(_), player.currentTime))
+        },
+        just_offs(offs: Array<Note>) {
+          offs.forEach(_ => player.release(ids[_], player.currentTime))
+        }
+      })
       onCleanup(() => {
+        midi.dispose()
       })
     }
   }))
