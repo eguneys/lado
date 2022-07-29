@@ -53,6 +53,10 @@ const KeySignatures = props => {
     </>)
 }
 
+const you_titles = {
+  'you': 'You Play',
+  'stop': 'Stop'
+}
 
 const CMajor = props => {
   let $ref
@@ -82,11 +86,11 @@ const CMajor = props => {
       <div class='controls'>
         <Show when={read(_show_controls)}>
         <Icon onClick={_ => props.solsido.major_playback.set_play(props.major)} title={props.major.play}>{props.major.play}</Icon>
-        <Icon title="You Play">you</Icon>
+        <Icon onClick={_ => props.solsido.major_you.set_play(props.major)} title={you_titles[props.major.you_mode]}>{props.major.you_mode}</Icon>
         </Show>
       </div>
       </div>
-      <div class="major-staff">
+      <div class={['major-staff', ...props.major.klass].join(' ')}>
         <div ref={$ref}> </div>
       </div>
     </div>)

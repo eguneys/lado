@@ -61,6 +61,14 @@ solsido {
   height: 4em;
 }
 
+.major-staff.you {
+  box-shadow: 0px 0px 0px 1px red;
+}
+
+.major-staff.playback {
+  box-shadow: 0px 0px 0px 1px yellow;
+}
+
 span.bra {
   font-family: BravuraText, sans-serif;
   line-height: 0.5em;

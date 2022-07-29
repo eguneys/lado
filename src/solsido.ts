@@ -3,6 +3,7 @@ import { make_ref } from './make_sticky'
 import { read, write, owrite } from './play'
 import { loop } from './play'
 import { uci_note, PlayerController } from 'aplayer'
+import { make_midi } from './make_midi'
 
 export default class Solsido {
 
@@ -16,9 +17,44 @@ export default class Solsido {
     this._majors = make_majors(this)
 
     this.major_playback = make_playback(this)
+
+    this.major_you = make_you(this)
   }
 }
 
+const make_you = (solsido: Solsido) => {
+
+  let midi = make_midi({
+    just_ons(ons: Array<Note>) {
+      console.log(ons)
+    },
+    just_offs(offs: Array<Note>) {
+    }
+  })
+  let _major = createSignal()
+
+
+  createEffect(on(_major[0], v => {
+    if (v) {
+      onCleanup(() => {
+      })
+    }
+  }))
+
+  return {
+
+    play_major(major: Major) {
+      owrite(_major, major)
+    },
+    stop_major(major: Major) {
+      owrite(_major, _ => _ === major ? undefined : _)
+    },
+    set_play(major: Major) {
+      solsido._majors.majors.forEach(_ => _.set_play_you(_ === major))
+    }
+  }
+
+}
 
 const make_playback = (solsido: Solsido) => {
 
@@ -181,11 +217,21 @@ const make_major = (solsido: Solsido, _major: Major) => {
   let _notes = _c_major ? cmajor_notes : _flat_major ? flat_notes(_major) : sharp_notes(_major)
 
   let _playback = createSignal(false)
+  let _you = createSignal(false)
 
   let _xwi = createSignal('0,0,0')
 
+
+  let m_klass = createMemo(() => [ 
+    read(_you) ? 'you' : '',
+    read(_playback) ? 'playback' : ''
+  ])
+
   let self = {
     key,
+    get klass() {
+      return m_klass()
+    },
     get letter() {
       return key[0]
     },
@@ -224,6 +270,15 @@ const make_major = (solsido: Solsido, _major: Major) => {
     set_play(v: boolean) {
       owrite(_playback, _ => v ? !_ : false)
     },
+    get you_mode() {
+      return read(_you) ? 'stop' : 'you'
+    },
+    set_play_you(v: boolean) {
+      owrite(_you, _ => v ? !_ : false)
+    },
+    get you() {
+      return read(_you)
+    },
     get playback() {
       return read(_playback)
     },
@@ -234,6 +289,19 @@ const make_major = (solsido: Solsido, _major: Major) => {
       return read(_xwi)
     }
   }
+
+
+  createEffect(on(_you[0], (v, p) => {
+    if (v) {
+      solsido.major_you.play_major(self)
+    } else {
+      if (!!p) {
+        solsido.major_you.stop_major(self)
+      }
+    }
+  }))
+
+
 
   createEffect(on(_playback[0], (v, p) => {
     if (v) {
