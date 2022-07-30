@@ -28,12 +28,12 @@ const make_you = (solsido: Solsido) => {
 
   let player = new PlayerController()
   let synth = {
-    wave: 'sine',
+    wave: 'triangle',
     volume: 1,
     amplitude: 0.2,
     cutoff: 0.6,
     cutoff_max: 0.2,
-    amp_adsr: { a: 0.02, d: 0.08, s: 0.3, r: 0.01 },
+    amp_adsr: { a: 0, d: 0.08, s: 0.3, r: 0.02 },
     filter_adsr: { a: 0, d: 0.08, s: 0.02, r: 0 }
   }
 
@@ -45,10 +45,10 @@ const make_you = (solsido: Solsido) => {
       let midi = make_midi({
         just_ons(ons: Array<Note>) {
           ons.forEach(_ => ids[_] = 
-                      player.attack(synth, uci_note(_), player.currentTime))
+                      player.attack(synth, uci_note(_)))
         },
         just_offs(offs: Array<Note>) {
-          offs.forEach(_ => player.release(ids[_], player.currentTime))
+          offs.forEach(_ => player.release(ids[_]))
         }
       })
       onCleanup(() => {
