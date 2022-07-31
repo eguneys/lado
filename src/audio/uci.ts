@@ -1,27 +1,32 @@
-import { make_note } from './types'
-import { note_pitch, note_octave, note_duration, note_accidental } from './types'
-let pitch_ucis = ['', 'c', 'd', 'e', 'f', 'g', 'a', 'b']
-
-export function note_uci(note: Note) {
-  let pitch = note_pitch(note),
-    octave = note_octave(note),
-    duration = note_duration(note),
-    accidental = note_accidental(note)
-
-  return [pitch_ucis[pitch], 
-    !!accidental ? '#' : ''].join('')
+export function midiToFreq(midi: number) {
+  return Math.pow(2, (midi - 69) / 12) * 440
 }
 
-let octave_ucis = ['', '1', '2', '3', '4', '5', '6', '7', '8']
-let accidental_ucis = ['', '#', 'f']
+/* https://github.com/tonaljs/tonal/blob/main/packages/core/src/note.ts */
+const REGEX = /^([a-gA-G]?)(#{1,}|b{1,}|x{1,}|)(-?\d*)\s*(.*)$/;
 
-export function uci_note(uci: string) {
-  let [__pitch, __octave, ...__accidental] = uci.split('')
+export function tokenizeNote(str: string) {
+  const m = REGEX.exec(str)
+  return [m[1].toUpperCase(), m[2].replace(/x/g, '##'), m[3], m[4]]
+}
 
-  let _pitch = pitch_ucis.indexOf(__pitch)
-  let _octave = octave_ucis.indexOf(__octave)
-  let _accidental = accidental_ucis.indexOf(__accidental.join(''))
+const mod = (n: number, m: number) => ((n % m) + m) % m
 
-  let accidental = _accidental > 0 ? _accidental : undefined
-  return make_note(_pitch, _octave, accidental, 1)
+const accToAlt = acc => acc[0] === 'b' ? -acc.length : acc.length
+
+const SEMI = [0, 2, 4, 5, 7, 9, 11]
+
+export function uci_midi(uci: string) {
+
+  const tokens = tokenizeNote(uci)
+
+  const [letter, acc, octStr] = tokens
+
+  const step = (letter.charCodeAt(0) + 3) % 7
+  const alt = accToAlt(acc)
+  const oct = octStr.length ? +octStr : undefined
+  const height = oct === undefined ? mod(SEMI[step] + alt, 12) - 12 * 99
+  : SEMI[step] + alt + 12 * (oct + 1)
+
+  return height
 }

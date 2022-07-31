@@ -195,8 +195,6 @@ export class MidiPlayer extends HasAudioAnalyser {
     osc1_mix.gain.setValueAtTime(0.5, now)
     osc2_mix.gain.setValueAtTime(0.5, now)
 
-    //osc2.detune.setValueAtTime(700, now)
-
     let filter = new BiquadFilterNode(context, { type: 'lowpass', Q: 6 })
     this.filter = filter
     osc1_mix.connect(filter)

@@ -2,8 +2,8 @@ import { onCleanup, on, createEffect, createSignal, createMemo, mapArray } from 
 import { make_ref } from './make_sticky'
 import { read, write, owrite } from './play'
 import { loop } from './play'
-import { uci_note, PlayerController } from './audio'
 import { make_midi } from './make_midi'
+import { PlayerController, uci_midi } from './audio'
 
 export default class Solsido {
 
@@ -33,8 +33,8 @@ const make_you = (solsido: Solsido) => {
     amplitude: 0.2,
     cutoff: 0.6,
     cutoff_max: 0.2,
-    amp_adsr: { a: 0, d: 0.08, s: 0.3, r: 0.02 },
-    filter_adsr: { a: 0, d: 0.08, s: 0.02, r: 0 }
+    amp_adsr: { a: 0.02, d: 0.08, h: 0, sl: 1, r: 0.1, il: 0, ml: 1 },
+    filter_adsr: { a: 0, d: 0.08, h: 0, sl: 0.2, r: 0.1, il: 0.6, ml: 0.8 }
   }
 
   createEffect(on(_major[0], v => {
@@ -45,7 +45,7 @@ const make_you = (solsido: Solsido) => {
       let midi = make_midi({
         just_ons(ons: Array<Note>) {
           ons.forEach(_ => ids[_] = 
-                      player.attack(synth, uci_note(_)))
+                      player.attack(synth, _))
         },
         just_offs(offs: Array<Note>) {
           offs.forEach(_ => player.release(ids[_]))
@@ -97,8 +97,8 @@ const make_playback = (solsido: Solsido) => {
     amplitude: 0.2,
     cutoff: 0.6,
     cutoff_max: 0.2,
-    amp_adsr: { a: 0.02, d: 0.08, s: 0.3, r: 0.01 },
-    filter_adsr: { a: 0, d: 0.08, s: 0.02, r: 0 }
+    amp_adsr: { a: 0.02, d: 0.08, h: 0, sl: 0.3, r: 0.01 },
+    filter_adsr: { a: 0, d: 0.08, h: 0, sl: 0.02, r: 0 }
   }
 
   let bpm = 120
@@ -123,7 +123,7 @@ const make_playback = (solsido: Solsido) => {
           x = (x + 1) % 8;
 
           [_x, _w] = v.xw_at(x)
-          let id = player.attack(synth, uci_note(v.notes[x]))
+          let id = player.attack(synth, uci_midi(v.notes[x]))
           player.release(id, player.currentTime + (ms_p_note - _i)/1000)
         }
 
