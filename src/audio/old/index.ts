@@ -1,3 +1,3 @@
-export * from './player'
-export * from './types'
+export * from './adsr'
+export * from './osc'
 export * from './uci'

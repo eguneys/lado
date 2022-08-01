@@ -1,9 +1,22 @@
-import { onCleanup, on, createEffect, createSignal, createMemo, mapArray } from 'solid-js'
+import { createResource, onCleanup, on, createEffect, createSignal, createMemo, mapArray } from 'solid-js'
 import { make_ref } from './make_sticky'
 import { read, write, owrite } from './play'
 import { loop } from './play'
 import { make_midi } from './make_midi'
-import { PlayerController, uci_midi } from './audio'
+import { SamplesPlayer } from './audio'
+
+const getPlayerController = async (input: boolean) => {
+  if (input) {
+    let p = new SamplesPlayer()
+    await p.init({
+      srcs: {
+        'C4': 'C4.mp3'
+      },
+      base_url: 'https://github.com/gleitz/midi-js-soundfonts/blob/gh-pages/FatBoy/acoustic_grand_piano-mp3/'
+    })
+    return p
+  }
+}
 
 export default class Solsido {
 
@@ -12,6 +25,11 @@ export default class Solsido {
   }
 
   constructor() {
+
+    this._user_click = createSignal(false)
+
+    this.r_pc = createResource(this._user_click[0], getPlayerController)
+
     this.ref = make_ref()
 
     this._majors = make_majors(this)
@@ -26,29 +44,21 @@ const make_you = (solsido: Solsido) => {
 
   let _major = createSignal()
 
-  let player = new PlayerController()
   let synth = {
-    wave: 'triangle',
-    volume: 1,
-    amplitude: 0.2,
-    cutoff: 0.6,
-    cutoff_max: 0.2,
-    amp_adsr: { a: 0.02, d: 0.08, h: 0, sl: 1, r: 0.1, il: 0, ml: 1 },
-    filter_adsr: { a: 0, d: 0.08, h: 0, sl: 0.2, r: 0.1, il: 0.6, ml: 0.8 }
+    adsr: { a: 0.1, d: 0.1, s: 0.1, r: 0.1 }
   }
 
   createEffect(on(_major[0], v => {
     if (v) {
 
-      let ids = {}
-
       let midi = make_midi({
         just_ons(ons: Array<Note>) {
-          ons.forEach(_ => ids[_] = 
-                      player.attack(synth, _))
+          let player = read(solsido.r_pc)
+          ons.forEach(_ => player?.attack(synth, 'C4'))
         },
         just_offs(offs: Array<Note>) {
-          offs.forEach(_ => player.release(ids[_]))
+          let player = read(solsido.r_pc)
+          offs.forEach(_ => player?.release('C4'))
         }
       })
       onCleanup(() => {
@@ -66,6 +76,7 @@ const make_you = (solsido: Solsido) => {
       owrite(_major, _ => _ === major ? undefined : _)
     },
     set_play(major: Major) {
+      owrite(solsido._user_click, true)
       solsido._majors.majors.forEach(_ => _.set_play_you(_ === major))
     }
   }
@@ -89,17 +100,6 @@ const make_playback = (solsido: Solsido) => {
     }
     return 0
   })
-
-  let player = new PlayerController()
-  let synth = {
-    wave: 'triangle',
-    volume: 1,
-    amplitude: 0.2,
-    cutoff: 0.6,
-    cutoff_max: 0.2,
-    amp_adsr: { a: 0.02, d: 0.08, h: 0, sl: 0.3, r: 0.01 },
-    filter_adsr: { a: 0, d: 0.08, h: 0, sl: 0.02, r: 0 }
-  }
 
   let bpm = 120
   let note_per_beat = 2
