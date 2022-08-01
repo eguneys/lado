@@ -52,7 +52,7 @@ export default class Solsido {
 }
 
 let synth = {
-  adsr: { a: 0, d: 0.1, s: 0.8, r: 0.3 }
+  adsr: { a: 0, d: 0.1, s: 0.8, r: 0.6 }
 }
 
 

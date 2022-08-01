@@ -27,6 +27,7 @@ solsido {
 }
 
 .key-signatures {
+  font-size: calc((100vw - 100%) / ((13 + 0.5) * 2));
   display: flex;
   flex-flow: column;
 }
@@ -36,7 +37,7 @@ solsido {
   display: flex;
   flex-flow: row;
   /* https://stackoverflow.com/questions/33454533/cant-scroll-to-top-of-flex-item-that-is-overflowing-container */
-  gap: 1em;
+  gap: 0.5em;
   margin: auto;
 }
 
@@ -57,8 +58,8 @@ solsido {
 
 .cmajor .major-staff {
   position: relative;
-  width: 13em;
-  height: 4em;
+  min-width: 13em;
+  aspect-ratio: 13/4;
 }
 
 .major-staff.you {
