@@ -10,7 +10,7 @@
     "lint:watch": "tsc --outDir dist --watch",
     "watch": "yarn -s clean && rollup --config --watch",
     "build:examples": "yarn -s clean && rollup --config --config-prod",
-    "build": "yarn -s clean && yarn lib && rollup --config --config-prod --format=es"
+    "build": "yarn -s clean && rollup --config --config-prod --format=es"
   },
   "devDependencies": {
     "@babel/core": "^7.18.0",

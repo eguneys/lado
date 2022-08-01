@@ -3,16 +3,23 @@ import { make_ref } from './make_sticky'
 import { read, write, owrite } from './play'
 import { loop } from './play'
 import { make_midi } from './make_midi'
-import { SamplesPlayer } from './audio'
+import { SamplesPlayer, all_by_octave, fuzzy_name } from './audio'
 
 const getPlayerController = async (input: boolean) => {
   if (input) {
+
+    let treble_notes = [3, 4, 5, 6]
+    .flatMap(_ => all_by_octave.get(_))
+    .filter(_ => !_.name.includes('#'))
+
+    let srcs = {}
+
+    treble_notes.forEach(n => srcs[n.name] = `${n.name}.mp3`)
+
     let p = new SamplesPlayer()
     await p.init({
-      srcs: {
-        'C4': 'C4.mp3'
-      },
-      base_url: 'https://github.com/gleitz/midi-js-soundfonts/blob/gh-pages/FatBoy/acoustic_grand_piano-mp3/'
+      srcs,
+      base_url: 'assets/audio/'
     })
     return p
   }
@@ -22,6 +29,10 @@ export default class Solsido {
 
   onScroll() {
     this.ref.$clear_bounds()
+  }
+
+  get player() {
+    return read(this.r_pc)
   }
 
   constructor() {
@@ -40,25 +51,26 @@ export default class Solsido {
   }
 }
 
+let synth = {
+  adsr: { a: 0, d: 0.1, s: 0.8, r: 0.3 }
+}
+
+
 const make_you = (solsido: Solsido) => {
 
   let _major = createSignal()
-
-  let synth = {
-    adsr: { a: 0.1, d: 0.1, s: 0.1, r: 0.1 }
-  }
 
   createEffect(on(_major[0], v => {
     if (v) {
 
       let midi = make_midi({
         just_ons(ons: Array<Note>) {
-          let player = read(solsido.r_pc)
-          ons.forEach(_ => player?.attack(synth, 'C4'))
+          let { player } = solsido
+          ons.forEach(_ => player?.attack(synth, fuzzy_name(_).name))
         },
         just_offs(offs: Array<Note>) {
-          let player = read(solsido.r_pc)
-          offs.forEach(_ => player?.release('C4'))
+          let { player } = solsido
+          offs.forEach(_ => player?.release(fuzzy_name(_).name))
         }
       })
       onCleanup(() => {
@@ -118,13 +130,16 @@ const make_playback = (solsido: Solsido) => {
       let cancel = loop((dt: number, dt0: number) => {
         _i += dt
 
+      let { player } = solsido
         if (_i >= ms_p_note) {
           _i -= ms_p_note
           x = (x + 1) % 8;
 
           [_x, _w] = v.xw_at(x)
-          let id = player.attack(synth, uci_midi(v.notes[x]))
-          player.release(id, player.currentTime + (ms_p_note - _i)/1000)
+          let note = fuzzy_name(v.notes[x]).name
+
+          player?.attack(synth, note)
+          player?.release(note, player.currentTime + (ms_p_note - _i)/1000)
         }
 
         if (x > -1) {
@@ -146,6 +161,7 @@ const make_playback = (solsido: Solsido) => {
       owrite(_major, _ => _ === major ? undefined : _)
     },
     set_play(major: Major) {
+      owrite(solsido._user_click, true)
       solsido._majors.majors.forEach(_ => _.set_play(_ === major))
     }
   }
@@ -165,19 +181,19 @@ let sharp_majors = [
 ]
 
 let flats = {
-  'F Major': ['f4', 'b4'],
-  'Bflat Major': ['b3', 'b4', 'e5'],
+  'F Major': ['F4', 'B4'],
+  'Bflat Major': ['B3', 'B4', 'E5'],
 }
 
 let sharps = {
-  'G Major': ['g4', 'f5'],
-  'D Major': ['d4', 'f5', 'c5'],
-  'F# Major': ['f4', 'f5', 'c5', 'g5', 'd5', 'a4', 'e5']
+  'G Major': ['G4', 'F5'],
+  'D Major': ['D4', 'F5', 'C5'],
+  'F# Major': ['F4', 'F5', 'C5', 'G5', 'D5', 'A4', 'E5']
 }
 
 let increasing = [...Array(8).keys()].map(_ => _ * 0.125)
 
-let notes = ['b3', 'c4', 'd4', 'e4', 'f4', 'g4', 'a4', 'b4', 'c5', 'd5', 'e5', 'f5', 'g5']
+let notes = ['B3', 'C4', 'D4', 'E4', 'F4', 'G4', 'A4', 'B4', 'C5', 'D5', 'E5', 'F5', 'G5']
 
 const note_y = note => 0.625 - notes.indexOf(note) * 0.125
 
@@ -202,23 +218,23 @@ const sharp_bras = key => {
 }
 
 const cmajor_bras = [
-  'gclef@0.2,0', ...increasing.map((_, i) => `whole_note@${i*1.3+1.5},${note_y('c4')-_}`)]
+  'gclef@0.2,0', ...increasing.map((_, i) => `whole_note@${i*1.3+1.5},${note_y('C4')-_}`)]
 
 const octave_notes = (note: string) => notes.slice(notes.indexOf(note), notes.indexOf(note) + 8)
 
-const cmajor_notes = octave_notes('c4')
+const cmajor_notes = octave_notes('C4')
 const flat_notes = key => {
   let [note, ..._flats] = flats[key]
   let _notes = octave_notes(note)
 
-  return _notes.map(_ => _flats.includes(_) ? _ + 'f' : _)
+  return _notes.map(_ => _flats.includes(_) ? _[0] + 'b' + _[1] : _)
 } 
 
 const sharp_notes = key => {
   let [note, ..._sharps] = sharps[key]
   let _notes = octave_notes(note)
 
-  return _notes.map(_ => _sharps.includes(_) ? _ + '#' : _)
+  return _notes.map(_ => _sharps.includes(_) ? _[0] + '#' + _[1] : _)
 } 
 
 const make_major = (solsido: Solsido, _major: Major) => {

@@ -49,8 +49,9 @@ export class SamplesPlayer {
     let buffers = await Promise
     .all(Object.keys(srcs)
          .map(key => 
-              [key,
-              decode_audio(this.context, load_audio(base_url + srcs[key]))]))
+              load_audio(base_url + srcs[key])
+              .then(_ => decode_audio(this.context, _))
+              .then(_ => [key, _])))
 
     this._buffers = new Map(buffers)
   }
@@ -58,7 +59,6 @@ export class SamplesPlayer {
   _ps = new Map<Note, SamplePlayer>
 
   attack(synth: Synth, note: Note, now: number = this.context.currentTime) {
-
     let buffer = this._buffers.get(note)
     let p = new SamplePlayer(this.context, buffer)._set_data({synth})
 
@@ -70,8 +70,10 @@ export class SamplesPlayer {
   release(note: Note, now: number = this.context.currentTime) {
 
     let _ = this._ps.get(note)
-    _.release(now)
-    this._ps.delete(note)
+    if (_) {
+      _.release(now)
+      this._ps.delete(note)
+    }
   }
 }
 
@@ -96,6 +98,7 @@ class SamplePlayer extends HasAudioAnalyser {
     this.source_mix = source_mix
 
     let source = context.createBufferSource()
+    this.source = source
     source.buffer = buffer
     source.connect(source_mix)
 
@@ -110,6 +113,7 @@ class SamplePlayer extends HasAudioAnalyser {
     let { synth: { adsr } } = this.data
 
     r(this.source_mix.gain, now, adsr, 0)
+    this.source.stop(now + adsr.r)
   }
 
 }
