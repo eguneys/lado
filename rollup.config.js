@@ -24,7 +24,7 @@ export default args => {
     input: 'src/main.ts',
     output: {
       format: 'iife',
-      name: 'VStaff',
+      name: 'Lado',
       dir: 'dist',
       ...(prod ? {
        // format: 'es'
