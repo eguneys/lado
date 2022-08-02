@@ -27,6 +27,7 @@ solsido {
 }
 
 .key-signatures {
+  /* https://stackoverflow.com/questions/33606565/is-it-possible-to-calculate-the-viewport-width-vw-without-scrollbar */
   font-size: calc((100vw - 100%) / ((13 + 0.5) * 2));
   display: flex;
   flex-flow: column;

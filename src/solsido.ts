@@ -67,6 +67,8 @@ const make_you = (solsido: Solsido) => {
         just_ons(ons: Array<Note>) {
           let { player } = solsido
           ons.forEach(_ => player?.attack(synth, fuzzy_name(_).name))
+          v.playing_note = fuzzy_name(ons[0])
+
         },
         just_offs(offs: Array<Note>) {
           let { player } = solsido
@@ -133,13 +135,17 @@ const make_playback = (solsido: Solsido) => {
       let { player } = solsido
         if (_i >= ms_p_note) {
           _i -= ms_p_note
-          x = (x + 1) % 8;
+          x = x + 1
 
-          [_x, _w] = v.xw_at(x)
-          let note = fuzzy_name(v.notes[x]).name
+          if (x >= 8) {
+            x -= 9
+          } else {
+            [_x, _w] = v.xw_at(x)
+            let note = fuzzy_name(v.notes[x]).name
 
-          player?.attack(synth, note)
-          player?.release(note, player.currentTime + (ms_p_note - _i)/1000)
+            player?.attack(synth, note)
+            player?.release(note, player.currentTime + (ms_p_note - _i)/1000)
+          }
         }
 
         if (x > -1) {
@@ -259,6 +265,9 @@ const make_major = (solsido: Solsido, _major: Major) => {
     read(_playback) ? 'playback' : ''
   ])
 
+  let _bras_playing = createSignal([])
+
+
   let self = {
     key,
     get klass() {
@@ -274,7 +283,11 @@ const make_major = (solsido: Solsido, _major: Major) => {
       return _major
     },
     get bras() {
-      return _bras
+      return [..._bras, ...read(_bras_playing)]
+    },
+    set playing_note(note: Note) {
+      
+      //owrite(_bras_playing, note_bras(note))
     },
     get notes() {
       return _notes
