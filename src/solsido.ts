@@ -3,18 +3,15 @@ import { make_ref } from './make_sticky'
 import { read, write, owrite } from './play'
 import { loop } from './play'
 import { make_midi } from './make_midi'
-import { SamplesPlayer, all_by_octave, fuzzy_name } from './audio'
+import { SamplesPlayer } from './audio'
+import { short_range_flat_notes, fuzzy_note } from './audio'
 
 const getPlayerController = async (input: boolean) => {
   if (input) {
 
-    let treble_notes = [3, 4, 5, 6]
-    .flatMap(_ => all_by_octave.get(_))
-    .filter(_ => !_.name.includes('#'))
-
     let srcs = {}
 
-    treble_notes.forEach(n => srcs[n.name] = `${n.name}.mp3`)
+    short_range_flat_notes.forEach(n => srcs[n] = `${n}.mp3`)
 
     let p = new SamplesPlayer()
     await p.init({
@@ -66,13 +63,13 @@ const make_you = (solsido: Solsido) => {
       let midi = make_midi({
         just_ons(ons: Array<Note>) {
           let { player } = solsido
-          ons.forEach(_ => player?.attack(synth, fuzzy_name(_).name))
-          v.playing_note = fuzzy_name(ons[0])
+          ons.forEach(_ => player?.attack(synth, fuzzy_note(_)))
+          v.playing_note = fuzzy_note(ons[0])
 
         },
         just_offs(offs: Array<Note>) {
           let { player } = solsido
-          offs.forEach(_ => player?.release(fuzzy_name(_).name))
+          offs.forEach(_ => player?.release(fuzzy_note(_)))
         }
       })
       onCleanup(() => {
@@ -141,7 +138,7 @@ const make_playback = (solsido: Solsido) => {
             x -= 9
           } else {
             [_x, _w] = v.xw_at(x)
-            let note = fuzzy_name(v.notes[x]).name
+            let note = fuzzy_note(v.notes[x])
 
             player?.attack(synth, note)
             player?.release(note, player.currentTime + (ms_p_note - _i)/1000)

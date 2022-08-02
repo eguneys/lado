@@ -37,6 +37,7 @@
   },
   "dependencies": {
     "@rollup/plugin-replace": "^4.0.0",
+    "@tonaljs/tonal": "^4.6.5",
     "tone": "^14.8.40"
   }
 }

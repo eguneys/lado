@@ -1,96 +1,215 @@
-export type Pitch = 1 | 2 | 3 | 4 | 5 | 6 | 7
-export type Octave = 1 | 2 | 3 | 4 | 5 | 6 | 7
-
-export type Duration = 1 | 2 | 3 | 4 | 5 | 6 | 7 | 8
+const accToAlt = (acc: string) => acc[0] === 'b' ? -acc.length : acc.length
 
 
-export type Accidental = 1 | 2 | 3 | 4 | 5
-
-export type Note = number
-
-export type Clef = 1 | 2
-
-export type Rest = Duration
-
-export type NbNoteValuePerMeasure = 2 | 3 | 4 | 6 | 9 | 12
-export type NoteValue = Duration
-
-export type TimeSignature = number
-
-export type Tempo = 1 | 2 | 3 | 4 | 5 | 6 | 7 | 8
+const ROMAN_REGEX = /^(#{1,}|b{1,}|x{1,}|)(IV|I{1,3}|VI{0,2}|iv|i{1,3}|vi{0,2})([^IViv]*)$/;
 
 
-export type BeatMeasure = number
-export type BeatQuanti = BeatMeasure
+const ROMANS = "I II III IV V VI VII"
+const NAMES = ROMANS.split(" ")
+const NAMES_MINOR = ROMANS.toLowerCase().split(" ")
 
 
-const pitch_mask =      0x0000000f
-const octave_mask =     0x000000f0
-const duration_mask =   0x00000f00
-const accidental_mask = 0x0000f000
+const all_roman = NAMES.map(_ => roman_parse(_))
+const roman_by_name = new Map(all_roman.map(_ => [_.name, _]))
 
-const note_1 = make_note(1, 1, undefined, 1)
-const note_n = make_note(7, 7, 2, 8)
+export const SHARPS = "C C# D D# E F F# G G# A A# B".split(" ");
+export const FLATS = "C Db D Eb E F Gb G Ab A Bb B".split(" ");
 
-export function is_note(n: number): n is Note {
-  return note_1 <= n && n <= note_n
+export const SHARPS_FLATS = [...new Set([...SHARPS, ...FLATS])]
+
+export const OCTAVES = "0 1 2 3 4 5 6 7 8".split(" ")
+
+export const NOTES = OCTAVES.flatMap(octave => SHARPS_FLATS.map(name => name+octave))
+
+
+const SEMI = [0, 2, 4, 5, 7, 9, 11]
+
+const mod = (n: number, m: number) => ((n % m) + m ) % m
+
+
+const REGEX = /^([a-gA-G]?)(#{1,}|b{1,}|x{1,}|)(-?\d*)\s*(.*)$/;
+export function tokenizeNote(str: string) {
+  const m = REGEX.exec(str)
+  return [m[1].toUpperCase(), m[2].replace(/x/g, '##'), m[3], m[4]]
 }
 
-export function is_rest(n: number): n is Rest {
-  return n >= 1 && n <= 8
+function parse(noteName: string) {
+
+  const tokens = tokenizeNote(noteName)
+
+  const [letter, acc, octStr] = tokens
+
+
+  const step = (letter.charCodeAt(0) + 3) % 7
+  const alt = accToAlt(acc)
+  const oct = octStr.length ? parseInt(octStr) : undefined
+
+  const name = letter + acc + octStr
+  const pc = letter + acc
+  const height =
+    oct === undefined ? mod(SEMI[step] + alt, 12) - 12 * 99 :
+    SEMI[step] + alt + 12 * (oct + 1)
+  const midi = height
+  const freq = Math.pow(2, (height - 69) / 12) * 440
+
+  return {
+    name,
+    pc,
+    height,
+    midi,
+    freq,
+    oct,
+    acc
+  }
 }
 
-export function make_note_po(po: [Pitch, Octave, Accidental], duration: Duration) {
-  return make_note(po[0], po[1], po[2], duration)
+export const all = NOTES.map(parse)
+export const all_freqs = [...new Set(all.map(_ => _.freq))]
+
+export const by_octaves = OCTAVES.map(_ => all.filter(__ => __.oct === parseInt(_)))
+export const by_freqs = all_freqs.map(_ => all.filter(__ => __.freq === _))
+
+export const by_name = new Map(all.map(_ => [_.name, _]))
+export const by_height = new Map(all.map(_ => [_.height, _]))
+export const by_midi = new Map(all.map(_ => [_.midi, _]))
+export const all_by_freq = new Map(by_freqs.map(_ => [_[0].freq, _]))
+export const all_by_octave = new Map(by_octaves.map(_ => [_[0].oct, _]))
+
+export const fuzzy_note = (fuzzy: string) => {
+  let res = by_midi.get(fuzzy) || by_name.get(fuzzy) || by_height.get(fuzzy) || parse(fuzzy)
+  return res && all_by_freq.get(res.freq)?.find(_ => _.acc === '' || _.acc === 'b')
 }
 
-export function make_note(pitch: Pitch, octave: Octave, accidental?: Accidental, duration: Duration) {
-  return pitch | (octave << 4) | (duration << 8) | ((accidental || 0) << 12)
-}
+function keyScale(grades: string[]) {
+  return (tonic: string): KeyScale => {
+    let intervals = grades.map(gr => roman_by_name.get(gr).interval)
+    //let scale = intervals.map(interval => transpose(tonic, interval))
 
-export function note_pitch(note: Note): Pitch {
-  return (note & pitch_mask) as Pitch
-}
-
-export function note_octave(note: Note): Octave {
-  return (note & octave_mask) >> 4 as Octave
-}
-
-export function note_duration(note: Note): Duration {
-  return (note & duration_mask) >> 8 as Duration
-}
-
-export function note_accidental(note: Note): Accidental | undefined {
-  return (note & accidental_mask) >> 12 as Accidental
+    console.log(intervals)
+    return {
+      tonic,
+      grades,
+      intervals,
+      //scale
+    }
+  }
 }
 
 
+const MajorScale = keyScale(
+  "I II III IV V VI VII".split(" "))
 
-export function make_time_signature(nb_note_value: NbNoteValuePerMeasure, note_value: NoteValue) {
 
-  return nb_note_value * 16 + note_value
+function majorKey(tonic: string) {
+  const pc = fuzzy_note(tonic).pc
+
+  const keyScale = MajorScale(pc)
+
+  return {
+    ...keyScale
+  }
+}
+console.log(majorKey('C4'))
+
+
+
+
+function roman_token(str: string) {
+  return ROMAN_REGEX.exec(str)
 }
 
-export function time_nb_note_value(signature: TimeSignature): NbNoteValuePerMeasure {
-  return Math.floor(signature / 16) as NbNoteValuePerMeasure
+function roman_parse(str: string) {
+  const [name, acc, roman, chordType] = roman_token(str)
+
+  const upperRoman = roman.toUpperCase()
+  const step = NAMES.indexOf(upperRoman)
+  const alt = accToAlt(acc)
+  const dir = 1
+  return {
+    name,
+    roman,
+    interval: interval({ step, alt, dir }).name,
+    acc,
+    chordType,
+    alt,
+    step,
+    major: roman === upperRoman,
+    oct: 0,
+    dir
+  }
 }
 
-export function time_note_value(signature: TimeSignature): NoteValue {
-  return signature % 16 as NoteValue
+// shorthand tonal notation (with quality after number)
+const INTERVAL_TONAL_REGEX = "([-+]?\\d+)(d{1,4}|m|M|P|A{1,4})";
+// standard shorthand notation (with quality before number)
+const INTERVAL_SHORTHAND_REGEX = "(AA|A|P|M|m|d|dd)([-+]?\\d+)";
+const INTERVAL_REGEX = new RegExp(
+  "^" + INTERVAL_TONAL_REGEX + "|" + INTERVAL_SHORTHAND_REGEX + "$"
+);
+
+
+export function tokenizeInterval(str?: IntervalName): IntervalTokens {
+  const m = INTERVAL_REGEX.exec(`${str}`);
+  return m[1] ? [m[1], m[2]] : [m[4], m[3]];
 }
 
-export function tempo_tempo(tempo: Tempo) {
-  return tempos[tempo - 1]
+const SIZES = [0, 2, 4, 5, 7, 9, 11]
+const TYPES = "PMMPPMM"
+function parse_interval(str: string) {
+  const tokens = tokenizeInterval(str)
+  const num = +tokens[0]
+  const q = tokens[1]
+  const step = (Math.abs(num) - 1) % 7
+  const t = TYPES[step]
+
+  const type = t === "M" ? "majorable" : "perfectable"
+
+  const name = '' + num + q
+  const dir = num < 0 ? -1 : 1
+  const simple = num === 8 || num === -8 ? num : dir * (step + 1)
+  const alt = qToAlt(type, q)
+  const oct = Math.floor((Math.abs(num) - 1) / 7)
+  const semitones = dir * (SIZES[step] + alt + 12 * oct)
+  const coord = encode({ step, alt, oct, dir })
+
+  return {
+    name,
+    num,
+    q,
+    step,
+    type,
+    alt,
+    dir,
+    simple,
+    semitones,
+    coord,
+    oct
+  }
 }
 
-export function is_tempo(tempo: number): tempo is Tempo {
-  return tempo >= 1 && tempo <= 8
+
+function qToAlt(type: Type, q: string): number {
+  return (q === "M" && type === "majorable") ||
+    (q === "P" && type === "perfectable") ? 0 : 
+    q === "m" && type === "majorable" ? -1 : 
+    /^A+$/.test(q) ? q.length :
+    /^d+$/.test(q) ? -1 * (type === "perfectable" ? q.length : q.length + 1) : 0
 }
 
-export function time_duration_bm(time_signature: TimeSignature, duration: Duration) {
-  return Math.max(1, Math.pow(2, time_note_value(time_signature) - duration) * 8)
-}
 
-export function time_bm_duration(time: TimeSignature, quanti: BeatMeasure) {
-  return time_note_value(time) - Math.log(quanti / 8) / Math.log(2) as Duration
+
+const FIFTHS = [0, 2, 4, -1, 1, 3, 5]
+const STEPS_TO_OCTS = FIFTHS.map((fifths: number) =>
+                                 Math.floor((fifths * 7) / 12))
+
+function encode(pitch) {
+  const { step, alt, oct, dir = 1 } = pitch
+  const f = FIFTHS[step] + 7 * alt
+
+  if (oct === undefined) {
+    return [dir * f]
+  }
+
+  const o = oct = STEPS_TO_OCTS[step] - 4 * alt
+  return [dir * f, dir * o]
 }
