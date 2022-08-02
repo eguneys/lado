@@ -1525,6 +1525,7 @@ var Lado = (function () {
               player
             } = solsido;
             ons.forEach(_ => player?.attack(synth, fuzzy_name(_).name));
+            v.playing_note = fuzzy_name(ons[0]);
           },
 
           just_offs(offs) {
@@ -1595,11 +1596,16 @@ var Lado = (function () {
 
           if (_i >= ms_p_note) {
             _i -= ms_p_note;
-            x = (x + 1) % 8;
-            [_x, _w] = v.xw_at(x);
-            let note = fuzzy_name(v.notes[x]).name;
-            player?.attack(synth, note);
-            player?.release(note, player.currentTime + (ms_p_note - _i) / 1000);
+            x = x + 1;
+
+            if (x >= 8) {
+              x -= 9;
+            } else {
+              [_x, _w] = v.xw_at(x);
+              let note = fuzzy_name(v.notes[x]).name;
+              player?.attack(synth, note);
+              player?.release(note, player.currentTime + (ms_p_note - _i) / 1000);
+            }
           }
 
           if (x > -1) {
@@ -1699,6 +1705,9 @@ var Lado = (function () {
     let _xwi = createSignal$1('0,0,0');
 
     let m_klass = createMemo$1(() => [read$1(_you) ? 'you' : '', read$1(_playback) ? 'playback' : '']);
+
+    let _bras_playing = createSignal$1([]);
+
     let self = {
       key,
 
@@ -1719,7 +1728,10 @@ var Lado = (function () {
       },
 
       get bras() {
-        return _bras;
+        return [..._bras, ...read$1(_bras_playing)];
+      },
+
+      set playing_note(note) {//owrite(_bras_playing, note_bras(note))
       },
 
       get notes() {
