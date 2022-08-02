@@ -7,7 +7,7 @@ var Lado = (function () {
   }
 
   const equalFn$1 = (a, b) => a === b;
-  const $PROXY = Symbol("solid-proxy");
+  const $TRACK$1 = Symbol("solid-track");
   const signalOptions$1 = {
     equals: equalFn$1
   };
@@ -487,60 +487,123 @@ var Lado = (function () {
   function handleError$1(err) {
     throw err;
   }
+
+  const FALLBACK$1 = Symbol("fallback");
+  function dispose$1(d) {
+    for (let i = 0; i < d.length; i++) d[i]();
+  }
+  function mapArray$1(list, mapFn, options = {}) {
+    let items = [],
+        mapped = [],
+        disposers = [],
+        len = 0,
+        indexes = mapFn.length > 1 ? [] : null;
+    onCleanup$1(() => dispose$1(disposers));
+    return () => {
+      let newItems = list() || [],
+          i,
+          j;
+      newItems[$TRACK$1];
+      return untrack$1(() => {
+        let newLen = newItems.length,
+            newIndices,
+            newIndicesNext,
+            temp,
+            tempdisposers,
+            tempIndexes,
+            start,
+            end,
+            newEnd,
+            item;
+        if (newLen === 0) {
+          if (len !== 0) {
+            dispose$1(disposers);
+            disposers = [];
+            items = [];
+            mapped = [];
+            len = 0;
+            indexes && (indexes = []);
+          }
+          if (options.fallback) {
+            items = [FALLBACK$1];
+            mapped[0] = createRoot$1(disposer => {
+              disposers[0] = disposer;
+              return options.fallback();
+            });
+            len = 1;
+          }
+        }
+        else if (len === 0) {
+          mapped = new Array(newLen);
+          for (j = 0; j < newLen; j++) {
+            items[j] = newItems[j];
+            mapped[j] = createRoot$1(mapper);
+          }
+          len = newLen;
+        } else {
+          temp = new Array(newLen);
+          tempdisposers = new Array(newLen);
+          indexes && (tempIndexes = new Array(newLen));
+          for (start = 0, end = Math.min(len, newLen); start < end && items[start] === newItems[start]; start++);
+          for (end = len - 1, newEnd = newLen - 1; end >= start && newEnd >= start && items[end] === newItems[newEnd]; end--, newEnd--) {
+            temp[newEnd] = mapped[end];
+            tempdisposers[newEnd] = disposers[end];
+            indexes && (tempIndexes[newEnd] = indexes[end]);
+          }
+          newIndices = new Map();
+          newIndicesNext = new Array(newEnd + 1);
+          for (j = newEnd; j >= start; j--) {
+            item = newItems[j];
+            i = newIndices.get(item);
+            newIndicesNext[j] = i === undefined ? -1 : i;
+            newIndices.set(item, j);
+          }
+          for (i = start; i <= end; i++) {
+            item = items[i];
+            j = newIndices.get(item);
+            if (j !== undefined && j !== -1) {
+              temp[j] = mapped[i];
+              tempdisposers[j] = disposers[i];
+              indexes && (tempIndexes[j] = indexes[i]);
+              j = newIndicesNext[j];
+              newIndices.set(item, j);
+            } else disposers[i]();
+          }
+          for (j = start; j < newLen; j++) {
+            if (j in temp) {
+              mapped[j] = temp[j];
+              disposers[j] = tempdisposers[j];
+              if (indexes) {
+                indexes[j] = tempIndexes[j];
+                indexes[j](j);
+              }
+            } else mapped[j] = createRoot$1(mapper);
+          }
+          mapped = mapped.slice(0, len = newLen);
+          items = newItems.slice(0);
+        }
+        return mapped;
+      });
+      function mapper(disposer) {
+        disposers[j] = disposer;
+        if (indexes) {
+          const [s, set] = createSignal$1(j);
+          indexes[j] = set;
+          return mapFn(newItems[j], s);
+        }
+        return mapFn(newItems[j]);
+      }
+    };
+  }
   function createComponent$1(Comp, props) {
     return untrack$1(() => Comp(props || {}));
   }
-  function trueFn() {
-    return true;
-  }
-  const propTraps = {
-    get(_, property, receiver) {
-      if (property === $PROXY) return receiver;
-      return _.get(property);
-    },
-    has(_, property) {
-      return _.has(property);
-    },
-    set: trueFn,
-    deleteProperty: trueFn,
-    getOwnPropertyDescriptor(_, property) {
-      return {
-        configurable: true,
-        enumerable: true,
-        get() {
-          return _.get(property);
-        },
-        set: trueFn,
-        deleteProperty: trueFn
-      };
-    },
-    ownKeys(_) {
-      return _.keys();
-    }
-  };
-  function resolveSource(s) {
-    return (s = typeof s === "function" ? s() : s) == null ? {} : s;
-  }
-  function mergeProps(...sources) {
-    return new Proxy({
-      get(property) {
-        for (let i = sources.length - 1; i >= 0; i--) {
-          const v = resolveSource(sources[i])[property];
-          if (v !== undefined) return v;
-        }
-      },
-      has(property) {
-        for (let i = sources.length - 1; i >= 0; i--) {
-          if (property in resolveSource(sources[i])) return true;
-        }
-        return false;
-      },
-      keys() {
-        const keys = [];
-        for (let i = 0; i < sources.length; i++) keys.push(...Object.keys(resolveSource(sources[i])));
-        return [...new Set(keys)];
-      }
-    }, propTraps);
+
+  function For$1(props) {
+    const fallback = "fallback" in props && {
+      fallback: () => props.fallback
+    };
+    return createMemo$1(mapArray$1(() => props.each, props.children, fallback ? fallback : undefined));
   }
   function Show$1(props) {
     let strictEqual = false;
@@ -555,6 +618,12 @@ var Lado = (function () {
       }
       return props.fallback;
     });
+  }
+
+  function memo(fn, equals) {
+    return createMemo$1(fn, undefined, !equals ? {
+      equals
+    } : undefined);
   }
 
   function reconcileArrays$1(parentNode, a, b) {
@@ -1480,7 +1549,7 @@ var Lado = (function () {
   }
 
   const NoNote = { empty: true, name: "", pc: "", acc: "" };
-  const cache$1 = new Map();
+  const cache$1$1 = new Map();
   const stepToLetter = (step) => "CDEFGAB".charAt(step);
   const altToAcc = (alt) => alt < 0 ? fillStr("b", -alt) : fillStr("#", alt);
   const accToAlt = (acc) => acc[0] === "b" ? -acc.length : acc.length;
@@ -1490,7 +1559,7 @@ var Lado = (function () {
    * note('Bb4') // => { name: "Bb4", midi: 70, chroma: 10, ... }
    */
   function note(src) {
-      const cached = cache$1.get(src);
+      const cached = cache$1$1.get(src);
       if (cached) {
           return cached;
       }
@@ -1501,15 +1570,15 @@ var Lado = (function () {
               : isNamed(src)
                   ? note(src.name)
                   : NoNote;
-      cache$1.set(src, value);
+      cache$1$1.set(src, value);
       return value;
   }
-  const REGEX$1 = /^([a-gA-G]?)(#{1,}|b{1,}|x{1,}|)(-?\d*)\s*(.*)$/;
+  const REGEX$1$1 = /^([a-gA-G]?)(#{1,}|b{1,}|x{1,}|)(-?\d*)\s*(.*)$/;
   /**
    * @private
    */
   function tokenizeNote(str) {
-      const m = REGEX$1.exec(str);
+      const m = REGEX$1$1.exec(str);
       return [m[1].toUpperCase(), m[2].replace(/x/g, "##"), m[3], m[4]];
   }
   /**
@@ -1605,7 +1674,7 @@ var Lado = (function () {
    */
   function interval(src) {
       return typeof src === "string"
-          ? cache$2[src] || (cache$2[src] = parse(src))
+          ? cache$2[src] || (cache$2[src] = parse$2(src))
           : isPitch(src)
               ? interval(pitchName(src))
               : isNamed(src)
@@ -1614,7 +1683,7 @@ var Lado = (function () {
   }
   const SIZES = [0, 2, 4, 5, 7, 9, 11];
   const TYPES = "PMMPPMM";
-  function parse(str) {
+  function parse$2(str) {
       const tokens = tokenizeInterval(str);
       if (tokens[0] === "") {
           return NoInterval;
@@ -1788,17 +1857,17 @@ var Lado = (function () {
   // UTILITIES
   const setNumToChroma = (num) => Number(num).toString(2);
   const chromaToNumber = (chroma) => parseInt(chroma, 2);
-  const REGEX = /^[01]{12}$/;
+  const REGEX$1 = /^[01]{12}$/;
   function isChroma(set) {
-      return REGEX.test(set);
+      return REGEX$1.test(set);
   }
   const isPcsetNum = (set) => typeof set === "number" && set >= 0 && set <= 4095;
   const isPcset = (set) => set && isChroma(set.chroma);
-  const cache = { [EmptyPcset.chroma]: EmptyPcset };
+  const cache$1 = { [EmptyPcset.chroma]: EmptyPcset };
   /**
    * Get the pitch class set of a collection of notes or set number or chroma
    */
-  function get$3(src) {
+  function get$4(src) {
       const chroma = isChroma(src)
           ? src
           : isPcsetNum(src)
@@ -1808,7 +1877,7 @@ var Lado = (function () {
                   : isPcset(src)
                       ? src.chroma
                       : EmptyPcset.chroma;
-      return (cache[chroma] = cache[chroma] || chromaToPcset(chroma));
+      return (cache$1[chroma] = cache$1[chroma] || chromaToPcset(chroma));
   }
   const IVLS = [
       "1P",
@@ -2030,7 +2099,7 @@ var Lado = (function () {
       aliases: [],
   });
   let dictionary = [];
-  let index$4 = {};
+  let index$5 = {};
   /**
    * Add a chord to the dictionary.
    * @param intervals
@@ -2040,7 +2109,7 @@ var Lado = (function () {
   function add$1(intervals, aliases, fullName) {
       const quality = getQuality(intervals);
       const chord = {
-          ...get$3(intervals),
+          ...get$4(intervals),
           name: fullName || "",
           quality,
           intervals,
@@ -2048,14 +2117,14 @@ var Lado = (function () {
       };
       dictionary.push(chord);
       if (chord.name) {
-          index$4[chord.name] = chord;
+          index$5[chord.name] = chord;
       }
-      index$4[chord.setNum] = chord;
-      index$4[chord.chroma] = chord;
+      index$5[chord.setNum] = chord;
+      index$5[chord.chroma] = chord;
       chord.aliases.forEach((alias) => addAlias$1(chord, alias));
   }
   function addAlias$1(chord, alias) {
-      index$4[alias] = chord;
+      index$5[alias] = chord;
   }
   function getQuality(intervals) {
       const has = (interval) => intervals.indexOf(interval) !== -1;
@@ -2220,7 +2289,7 @@ var Lado = (function () {
       intervals: [],
       aliases: [],
   };
-  let index$3 = {};
+  let index$4 = {};
   /**
    * Given a scale name or chroma, return the scale properties
    *
@@ -2229,8 +2298,8 @@ var Lado = (function () {
    * import { get } from 'tonaljs/scale-type'
    * get('major') // => { name: 'major', ... }
    */
-  function get$2(type) {
-      return index$3[type] || NoScaleType;
+  function get$3(type) {
+      return index$4[type] || NoScaleType;
   }
   /**
    * Add a scale into dictionary
@@ -2239,15 +2308,15 @@ var Lado = (function () {
    * @param aliases
    */
   function add(intervals, name, aliases = []) {
-      const scale = { ...get$3(intervals), name, intervals, aliases };
-      index$3[scale.name] = scale;
-      index$3[scale.setNum] = scale;
-      index$3[scale.chroma] = scale;
+      const scale = { ...get$4(intervals), name, intervals, aliases };
+      index$4[scale.name] = scale;
+      index$4[scale.setNum] = scale;
+      index$4[scale.chroma] = scale;
       scale.aliases.forEach((alias) => addAlias(scale, alias));
       return scale;
   }
   function addAlias(scale, alias) {
-      index$3[alias] = scale;
+      index$4[alias] = scale;
   }
   SCALES.forEach(([ivls, name, ...aliases]) => add(ivls.split(" "), name, aliases));
 
@@ -2326,7 +2395,7 @@ var Lado = (function () {
       return pc + o;
   }
 
-  const NAMES = ["C", "D", "E", "F", "G", "A", "B"];
+  const NAMES$1 = ["C", "D", "E", "F", "G", "A", "B"];
   const toName = (n) => n.name;
   const onlyNotes = (array) => array.map(note).filter((n) => !n.empty);
   /**
@@ -2337,7 +2406,7 @@ var Lado = (function () {
    */
   function names(array) {
       if (array === undefined) {
-          return NAMES.slice();
+          return NAMES$1.slice();
       }
       else if (!Array.isArray(array)) {
           return [];
@@ -2353,42 +2422,42 @@ var Lado = (function () {
    * @example
    * Note.get('Bb4') // => { name: "Bb4", midi: 70, chroma: 10, ... }
    */
-  const get$1 = note;
+  const get$2 = note;
   /**
    * Get the note name
    * @function
    */
-  const name = (note) => get$1(note).name;
+  const name = (note) => get$2(note).name;
   /**
    * Get the note pitch class name
    * @function
    */
-  const pitchClass = (note) => get$1(note).pc;
+  const pitchClass = (note) => get$2(note).pc;
   /**
    * Get the note accidentals
    * @function
    */
-  const accidentals = (note) => get$1(note).acc;
+  const accidentals = (note) => get$2(note).acc;
   /**
    * Get the note octave
    * @function
    */
-  const octave = (note) => get$1(note).oct;
+  const octave = (note) => get$2(note).oct;
   /**
    * Get the note midi
    * @function
    */
-  const midi = (note) => get$1(note).midi;
+  const midi = (note) => get$2(note).midi;
   /**
    * Get the note midi
    * @function
    */
-  const freq = (note) => get$1(note).freq;
+  const freq = (note) => get$2(note).freq;
   /**
    * Get the note chroma
    * @function
    */
-  const chroma = (note) => get$1(note).chroma;
+  const chroma = (note) => get$2(note).chroma;
   /**
    * Given a midi number, returns a note name. Uses flats for altered notes.
    *
@@ -2466,7 +2535,7 @@ var Lado = (function () {
    * [0, 1, 2, 3, 4].map(fifths => transposeFifths("C", fifths)) // => ["C", "G", "D", "A", "E"]
    */
   function transposeFifths(noteName, fifths) {
-      const note = get$1(noteName);
+      const note = get$2(noteName);
       if (note.empty) {
           return "";
       }
@@ -2500,7 +2569,7 @@ var Lado = (function () {
    * simplify("B#4") // => "C5"
    */
   const simplify = (noteName) => {
-      const note = get$1(noteName);
+      const note = get$2(noteName);
       if (note.empty) {
           return "";
       }
@@ -2522,12 +2591,12 @@ var Lado = (function () {
    * Note.enharmonic("F2","E#") // => "E#2"
    */
   function enharmonic(noteName, destName) {
-      const src = get$1(noteName);
+      const src = get$2(noteName);
       if (src.empty) {
           return "";
       }
       // destination: use given or generate one
-      const dest = get$1(destName ||
+      const dest = get$2(destName ||
           midiToNoteName(src.midi || src.chroma, {
               sharps: src.alt < 0,
               pitchClass: true,
@@ -2552,9 +2621,9 @@ var Lado = (function () {
       const destOct = src.oct + destOctOffset;
       return dest.pc + destOct;
   }
-  var index$2 = {
+  var index$3 = {
       names,
-      get: get$1,
+      get: get$2,
       name,
       pitchClass,
       accidentals,
@@ -2582,7 +2651,196 @@ var Lado = (function () {
       enharmonic,
   };
 
-  Object.freeze([]);
+  const NoRomanNumeral = { empty: true, name: "", chordType: "" };
+  const cache = {};
+  /**
+   * Get properties of a roman numeral string
+   *
+   * @function
+   * @param {string} - the roman numeral string (can have type, like: Imaj7)
+   * @return {Object} - the roman numeral properties
+   * @param {string} name - the roman numeral (tonic)
+   * @param {string} type - the chord type
+   * @param {string} num - the number (1 = I, 2 = II...)
+   * @param {boolean} major - major or not
+   *
+   * @example
+   * romanNumeral("VIIb5") // => { name: "VII", type: "b5", num: 7, major: true }
+   */
+  function get$1(src) {
+      return typeof src === "string"
+          ? cache[src] || (cache[src] = parse(src))
+          : typeof src === "number"
+              ? get$1(NAMES[src] || "")
+              : isPitch(src)
+                  ? fromPitch(src)
+                  : isNamed(src)
+                      ? get$1(src.name)
+                      : NoRomanNumeral;
+  }
+  function fromPitch(pitch) {
+      return get$1(altToAcc(pitch.alt) + NAMES[pitch.step]);
+  }
+  const REGEX = /^(#{1,}|b{1,}|x{1,}|)(IV|I{1,3}|VI{0,2}|iv|i{1,3}|vi{0,2})([^IViv]*)$/;
+  function tokenize(str) {
+      return (REGEX.exec(str) || ["", "", "", ""]);
+  }
+  const ROMANS = "I II III IV V VI VII";
+  const NAMES = ROMANS.split(" ");
+  function parse(src) {
+      const [name, acc, roman, chordType] = tokenize(src);
+      if (!roman) {
+          return NoRomanNumeral;
+      }
+      const upperRoman = roman.toUpperCase();
+      const step = NAMES.indexOf(upperRoman);
+      const alt = accToAlt(acc);
+      const dir = 1;
+      return {
+          empty: false,
+          name,
+          roman,
+          interval: interval({ step, alt, dir }).name,
+          acc,
+          chordType,
+          alt,
+          step,
+          major: roman === upperRoman,
+          oct: 0,
+          dir,
+      };
+  }
+
+  const Empty = Object.freeze([]);
+  const NoKey = {
+      type: "major",
+      tonic: "",
+      alteration: 0,
+      keySignature: "",
+  };
+  const NoKeyScale = {
+      tonic: "",
+      grades: Empty,
+      intervals: Empty,
+      scale: Empty,
+      chords: Empty,
+      chordsHarmonicFunction: Empty,
+      chordScales: Empty,
+  };
+  const NoMajorKey = {
+      ...NoKey,
+      ...NoKeyScale,
+      type: "major",
+      minorRelative: "",
+      scale: Empty,
+      secondaryDominants: Empty,
+      secondaryDominantsMinorRelative: Empty,
+      substituteDominants: Empty,
+      substituteDominantsMinorRelative: Empty,
+  };
+  const NoMinorKey = {
+      ...NoKey,
+      type: "minor",
+      relativeMajor: "",
+      natural: NoKeyScale,
+      harmonic: NoKeyScale,
+      melodic: NoKeyScale,
+  };
+  const mapScaleToType = (scale, list, sep = "") => list.map((type, i) => `${scale[i]}${sep}${type}`);
+  function keyScale(grades, chords, harmonicFunctions, chordScales) {
+      return (tonic) => {
+          const intervals = grades.map((gr) => get$1(gr).interval || "");
+          const scale = intervals.map((interval) => transpose$1(tonic, interval));
+          return {
+              tonic,
+              grades,
+              intervals,
+              scale,
+              chords: mapScaleToType(scale, chords),
+              chordsHarmonicFunction: harmonicFunctions.slice(),
+              chordScales: mapScaleToType(scale, chordScales, " "),
+          };
+      };
+  }
+  const distInFifths = (from, to) => {
+      const f = note(from);
+      const t = note(to);
+      return f.empty || t.empty ? 0 : t.coord[0] - f.coord[0];
+  };
+  const MajorScale = keyScale("I II III IV V VI VII".split(" "), "maj7 m7 m7 maj7 7 m7 m7b5".split(" "), "T SD T SD D T D".split(" "), "major,dorian,phrygian,lydian,mixolydian,minor,locrian".split(","));
+  const NaturalScale = keyScale("I II bIII IV V bVI bVII".split(" "), "m7 m7b5 maj7 m7 m7 maj7 7".split(" "), "T SD T SD D SD SD".split(" "), "minor,locrian,major,dorian,phrygian,lydian,mixolydian".split(","));
+  const HarmonicScale = keyScale("I II bIII IV V bVI VII".split(" "), "mMaj7 m7b5 +maj7 m7 7 maj7 o7".split(" "), "T SD T SD D SD D".split(" "), "harmonic minor,locrian 6,major augmented,lydian diminished,phrygian dominant,lydian #9,ultralocrian".split(","));
+  const MelodicScale = keyScale("I II bIII IV V VI VII".split(" "), "m6 m7 +maj7 7 7 m7b5 m7b5".split(" "), "T SD T SD D  ".split(" "), "melodic minor,dorian b2,lydian augmented,lydian dominant,mixolydian b6,locrian #2,altered".split(","));
+  /**
+   * Get a major key properties in a given tonic
+   * @param tonic
+   */
+  function majorKey$1(tonic) {
+      const pc = note(tonic).pc;
+      if (!pc)
+          return NoMajorKey;
+      const keyScale = MajorScale(pc);
+      const alteration = distInFifths("C", pc);
+      const romanInTonic = (src) => {
+          const r = get$1(src);
+          if (r.empty)
+              return "";
+          return transpose$1(tonic, r.interval) + r.chordType;
+      };
+      return {
+          ...keyScale,
+          type: "major",
+          minorRelative: transpose$1(pc, "-3m"),
+          alteration,
+          keySignature: altToAcc(alteration),
+          secondaryDominants: "- VI7 VII7 I7 II7 III7 -".split(" ").map(romanInTonic),
+          secondaryDominantsMinorRelative: "- IIIm7b5 IV#m7 Vm7 VIm7 VIIm7b5 -"
+              .split(" ")
+              .map(romanInTonic),
+          substituteDominants: "- bIII7 IV7 bV7 bVI7 bVII7 -"
+              .split(" ")
+              .map(romanInTonic),
+          substituteDominantsMinorRelative: "- IIIm7 Im7 IIbm7 VIm7 IVm7 -"
+              .split(" ")
+              .map(romanInTonic),
+      };
+  }
+  /**
+   * Get minor key properties in a given tonic
+   * @param tonic
+   */
+  function minorKey(tnc) {
+      const pc = note(tnc).pc;
+      if (!pc)
+          return NoMinorKey;
+      const alteration = distInFifths("C", pc) - 3;
+      return {
+          type: "minor",
+          tonic: pc,
+          relativeMajor: transpose$1(pc, "3m"),
+          alteration,
+          keySignature: altToAcc(alteration),
+          natural: NaturalScale(pc),
+          harmonic: HarmonicScale(pc),
+          melodic: MelodicScale(pc),
+      };
+  }
+  /**
+   * Given a key signature, returns the tonic of the major key
+   * @param sigature
+   * @example
+   * majorTonicFromKeySignature('###') // => 'A'
+   */
+  function majorTonicFromKeySignature(sig) {
+      if (typeof sig === "number") {
+          return transposeFifths("C", sig);
+      }
+      else if (typeof sig === "string" && /^b+|#+$/.test(sig)) {
+          return transposeFifths("C", accToAlt(sig));
+      }
+      return null;
+  }
+  var index$2 = { majorKey: majorKey$1, majorTonicFromKeySignature, minorKey };
 
   const MODES = [
       [0, 2773, 0, "ionian", "", "Maj7", "major"],
@@ -2640,7 +2898,7 @@ var Lado = (function () {
       const [modeNum, setNum, alt, name, triad, seventh, alias] = mode;
       const aliases = alias ? [alias] : [];
       const chroma = Number(setNum).toString(2);
-      const intervals = get$2(name).intervals;
+      const intervals = get$3(name).intervals;
       return {
           empty: false,
           intervals,
@@ -2711,16 +2969,19 @@ var Lado = (function () {
   }
   var index = { numeric, chromatic };
 
-  const short_range_flat_notes = index.numeric(["C3", "C6"]).map(index$2.fromMidi);
+  const short_range_flat_notes = index.numeric(["C3", "C6"]).map(index$3.fromMidi);
   const fuzzy_note = _ => {
-    let __ = index$2.get(_);
+    let __ = index$3.get(_);
 
     if (__.empty) {
-      return index$2.fromMidi(_);
+      return index$3.fromMidi(_);
     }
 
-    return index$2.fromFreq(__.freq);
+    return index$3.fromFreq(__.freq);
   };
+  const perfect_c_sharps = [...Array(7)].reduce((acc, _) => [...acc, transpose$1(acc[acc.length - 1], 'P5')], ['C']);
+  const perfect_c_flats = [...Array(7)].reduce((acc, _) => [...acc, transpose$1(acc[acc.length - 1], 'P4')], ['C']);
+  const majorKey = _ => index$2.majorKey(_);
 
   const getPlayerController = async input => {
     if (input) {
@@ -2885,67 +3146,8 @@ var Lado = (function () {
     };
   };
 
-  let c_major = 'C Major';
-  let flat_majors = ['F Major', 'Bflat Major'];
-  let sharp_majors = ['G Major', 'D Major', 'F# Major'];
-  let flats = {
-    'F Major': ['F4', 'B4'],
-    'Bflat Major': ['B3', 'B4', 'E5']
-  };
-  let sharps = {
-    'G Major': ['G4', 'F5'],
-    'D Major': ['D4', 'F5', 'C5'],
-    'F# Major': ['F4', 'F5', 'C5', 'G5', 'D5', 'A4', 'E5']
-  };
-  let increasing = [...Array(8).keys()].map(_ => _ * 0.125);
-  let notes = ['B3', 'C4', 'D4', 'E4', 'F4', 'G4', 'A4', 'B4', 'C5', 'D5', 'E5', 'F5', 'G5'];
-
-  const note_y = note => 0.625 - notes.indexOf(note) * 0.125;
-
-  const flat_bras = key => {
-    let [note, ..._flats] = flats[key];
-    return ['gclef@0.2,0', ..._flats.map((_, i) => `flat_accidental@${i * 0.3 + 1.2},${note_y(_)}`), ...increasing.map((_, i) => `whole_note@${i * 1.3 + 2},${note_y(note) - _}`)];
-  };
-
-  const sharp_bras = key => {
-    let [note, ..._sharps] = sharps[key];
-    let i_wnote = _sharps.length;
-    let g_wnote = 1.3 - i_wnote / 8 * 0.3;
-    return ['gclef@0.2,0', ..._sharps.map((_, i) => `sharp_accidental@${i * 0.3 + 1.2},${note_y(_)}`), ...increasing.map((_, i) => `whole_note@${i * g_wnote + 1.5 + i_wnote * 0.3},${note_y(note) - _}`)];
-  };
-
-  const cmajor_bras = ['gclef@0.2,0', ...increasing.map((_, i) => `whole_note@${i * 1.3 + 1.5},${note_y('C4') - _}`)];
-
-  const octave_notes = note => notes.slice(notes.indexOf(note), notes.indexOf(note) + 8);
-
-  const cmajor_notes = octave_notes('C4');
-
-  const flat_notes = key => {
-    let [note, ..._flats] = flats[key];
-
-    let _notes = octave_notes(note);
-
-    return _notes.map(_ => _flats.includes(_) ? _[0] + 'b' + _[1] : _);
-  };
-
-  const sharp_notes = key => {
-    let [note, ..._sharps] = sharps[key];
-
-    let _notes = octave_notes(note);
-
-    return _notes.map(_ => _sharps.includes(_) ? _[0] + '#' + _[1] : _);
-  };
-
-  const make_major = (solsido, _major) => {
-    let [key, major] = _major.split(' ');
-
-    let _c_major = _major === c_major;
-
-    let _flat_major = flat_majors.includes(_major);
-
-    let _bras = _c_major ? cmajor_bras : _flat_major ? flat_bras(_major) : sharp_bras(_major);
-
-    let _notes = _c_major ? cmajor_notes : _flat_major ? flat_notes(_major) : sharp_notes(_major);
+  const make_major = (solsido, key) => {
+    let _majorKey = majorKey(key);
 
     let _playback = createSignal$1(false);
 
@@ -2955,33 +3157,21 @@ var Lado = (function () {
 
     let m_klass = createMemo$1(() => [read$1(_you) ? 'you' : '', read$1(_playback) ? 'playback' : '']);
 
-    let _bras_playing = createSignal$1([]);
+    createSignal$1([]);
 
     let self = {
-      key,
-
       get klass() {
         return m_klass();
       },
 
-      get letter() {
-        return key[0];
+      get majorKey() {
+        return _majorKey;
       },
 
-      get flat() {
-        return !!key.match('flat');
+      get bras() {//return [..._bras, ...read(_bras_playing)]
       },
 
-      get name() {
-        return _major;
-      },
-
-      get bras() {
-        return [..._bras, ...read$1(_bras_playing)];
-      },
-
-      set playing_note(note) {//owrite(_bras_playing, note_bras(note))
-      },
+      set playing_note(note) {},
 
       get notes() {
         return _notes;
@@ -3058,17 +3248,19 @@ var Lado = (function () {
   };
 
   const make_majors = solsido => {
-    let _majors = [c_major, ...flat_majors, ...sharp_majors];
+    let _perfect_c_sharps = perfect_c_sharps.slice(1).map(_ => make_major(solsido, _));
 
-    let m_majors = _majors.map(_ => make_major(solsido, _));
+    let _perfect_c_flats = perfect_c_flats.slice(1).map(_ => make_major(solsido, _));
+
+    let _c = make_major(solsido, perfect_c_sharps[0]);
 
     return {
-      get majors() {
-        return m_majors;
+      get c_major() {
+        return _c;
       },
 
-      major(key) {
-        return m_majors.find(_ => _.key === key);
+      get sharps_flats_zipped() {
+        return _perfect_c_sharps.map((_, i) => [_perfect_c_flats[i], _]);
       }
 
     };
@@ -4408,7 +4600,7 @@ var Lado = (function () {
         _tmpl$4$1 = /*#__PURE__*/template(`<bar></bar>`),
         _tmpl$5$1 = /*#__PURE__*/template(`<stem></stem>`),
         _tmpl$6$1 = /*#__PURE__*/template(`<bra></bra>`),
-        _tmpl$7 = /*#__PURE__*/template(`<tie><svg width="1em" height="1em" viewBox="0 0 100 100"><path></path></svg></tie>`),
+        _tmpl$7$1 = /*#__PURE__*/template(`<tie><svg width="1em" height="1em" viewBox="0 0 100 100"><path></path></svg></tie>`),
         _tmpl$8 = /*#__PURE__*/template(`<beam><svg width="1em" height="1em" viewBox="0 0 100 100"><path></path></svg></beam>`);
 
   function unbindable$1(el, eventName, callback, options) {
@@ -4574,7 +4766,7 @@ var Lado = (function () {
 
   const Tie = props => {
     return (() => {
-      const _el$13 = _tmpl$7.cloneNode(true),
+      const _el$13 = _tmpl$7$1.cloneNode(true),
             _el$14 = _el$13.firstChild,
             _el$15 = _el$14.firstChild;
 
@@ -4742,10 +4934,11 @@ var Lado = (function () {
 
   const _tmpl$ = /*#__PURE__*/template$1(`<solsido></solsido>`),
         _tmpl$2 = /*#__PURE__*/template$1(`<h2> Major Key Signatures </h2>`),
-        _tmpl$3 = /*#__PURE__*/template$1(`<div class="key-signatures"><div> <!> </div><div></div><div></div><div></div></div>`),
-        _tmpl$4 = /*#__PURE__*/template$1(`<span class="bra"></span>`),
-        _tmpl$5 = /*#__PURE__*/template$1(`<div class="cmajor"><div class="header"><label> Major</label><div class="controls"></div></div><div><div> </div></div></div>`),
-        _tmpl$6 = /*#__PURE__*/template$1(`<span class="icon"></span>`);
+        _tmpl$3 = /*#__PURE__*/template$1(`<div class="key-signatures"><div> <!> </div></div>`),
+        _tmpl$4 = /*#__PURE__*/template$1(`<div></div>`),
+        _tmpl$5 = /*#__PURE__*/template$1(`<div class="cmajor"><div class="header"><label> <span class="major-type"></span> </label><div class="controls"></div></div><div><div> </div></div></div>`),
+        _tmpl$6 = /*#__PURE__*/template$1(`<span class="bra"></span>`),
+        _tmpl$7 = /*#__PURE__*/template$1(`<span class="icon"></span>`);
 
   function unbindable(el, eventName, callback, options) {
     el.addEventListener(eventName, callback, options);
@@ -4768,7 +4961,10 @@ var Lado = (function () {
       (_ => setTimeout(() => solsido.ref.$ref = _))(_el$);
 
       insert$1(_el$, createComponent$1(KeySignatures, {
-        solsido: solsido
+        get majors() {
+          return solsido._majors;
+        }
+
       }));
 
       return _el$;
@@ -4782,51 +4978,39 @@ var Lado = (function () {
             _el$5 = _el$4.firstChild,
             _el$7 = _el$5.nextSibling;
             _el$7.nextSibling;
-            const _el$8 = _el$4.nextSibling,
-            _el$9 = _el$8.nextSibling,
-            _el$10 = _el$9.nextSibling;
 
-      insert$1(_el$4, createComponent$1(CMajor, mergeProps(props, {
+      insert$1(_el$4, createComponent$1(CMajor, {
         get major() {
-          return props.solsido._majors.major('C');
+          return props.majors.c_major;
         }
 
-      })), _el$7);
+      }), _el$7);
 
-      insert$1(_el$8, createComponent$1(CMajor, mergeProps(props, {
-        get major() {
-          return props.solsido._majors.major('F');
-        }
+      insert$1(_el$3, createComponent$1(For$1, {
+        get each() {
+          return props.majors.sharps_flats_zipped;
+        },
 
-      })), null);
+        children: major => (() => {
+          const _el$8 = _tmpl$4.cloneNode(true);
 
-      insert$1(_el$8, createComponent$1(CMajor, mergeProps(props, {
-        get major() {
-          return props.solsido._majors.major('G');
-        }
+          insert$1(_el$8, createComponent$1(CMajor, {
+            get major() {
+              return major[0];
+            }
 
-      })), null);
+          }), null);
 
-      insert$1(_el$9, createComponent$1(CMajor, mergeProps(props, {
-        get major() {
-          return props.solsido._majors.major('Bflat');
-        }
+          insert$1(_el$8, createComponent$1(CMajor, {
+            get major() {
+              return major[1];
+            }
 
-      })), null);
+          }), null);
 
-      insert$1(_el$9, createComponent$1(CMajor, mergeProps(props, {
-        get major() {
-          return props.solsido._majors.major('D');
-        }
-
-      })), null);
-
-      insert$1(_el$10, createComponent$1(CMajor, mergeProps(props, {
-        get major() {
-          return props.solsido._majors.major('F#');
-        }
-
-      })));
+          return _el$8;
+        })()
+      }), null);
 
       return _el$3;
     })()];
@@ -4855,36 +5039,29 @@ var Lado = (function () {
     let _show_controls = createSignal$1(false);
 
     return (() => {
-      const _el$11 = _tmpl$5.cloneNode(true),
+      const _el$9 = _tmpl$5.cloneNode(true),
+            _el$10 = _el$9.firstChild,
+            _el$11 = _el$10.firstChild,
             _el$12 = _el$11.firstChild,
-            _el$13 = _el$12.firstChild,
-            _el$15 = _el$13.firstChild,
-            _el$16 = _el$13.nextSibling,
-            _el$17 = _el$12.nextSibling,
-            _el$18 = _el$17.firstChild;
+            _el$13 = _el$12.nextSibling,
+            _el$14 = _el$11.nextSibling,
+            _el$15 = _el$10.nextSibling,
+            _el$16 = _el$15.firstChild;
 
-      _el$11.$$mouseover = _ => owrite$1(_show_controls, true);
+      _el$9.$$mouseover = _ => owrite$1(_show_controls, true);
 
-      _el$11.addEventListener("mouseleave", _ => owrite$1(_show_controls, false));
+      _el$9.addEventListener("mouseleave", _ => owrite$1(_show_controls, false));
 
-      insert$1(_el$13, () => props.major.letter, _el$15);
-
-      insert$1(_el$13, createComponent$1(Show$1, {
-        get when() {
-          return props.major.flat;
-        },
-
-        get children() {
-          const _el$14 = _tmpl$4.cloneNode(true);
-
-          insert$1(_el$14, () => g['flat_accidental']);
-
-          return _el$14;
+      insert$1(_el$11, () => createComponent$1(Tonic, {
+        get tonic() {
+          return props.major.majorKey.tonic;
         }
 
-      }), _el$15);
+      }), _el$12);
 
-      insert$1(_el$16, createComponent$1(Show$1, {
+      insert$1(_el$13, () => props.major.majorKey.type);
+
+      insert$1(_el$14, createComponent$1(Show$1, {
         get when() {
           return read$1(_show_controls);
         },
@@ -4918,17 +5095,47 @@ var Lado = (function () {
       }));
 
       const _ref$ = $ref;
-      typeof _ref$ === "function" ? _ref$(_el$18) : $ref = _el$18;
+      typeof _ref$ === "function" ? _ref$(_el$16) : $ref = _el$16;
 
-      createRenderEffect$1(() => className$1(_el$17, ['major-staff', ...props.major.klass].join(' ')));
+      createRenderEffect$1(() => className$1(_el$15, ['major-staff', ...props.major.klass].join(' ')));
 
-      return _el$11;
+      return _el$9;
     })();
+  };
+
+  const Tonic = props => {
+    return [memo(() => props.tonic[0]), createComponent$1(Show$1, {
+      get when() {
+        return props.tonic[1] === 'b';
+      },
+
+      get children() {
+        const _el$17 = _tmpl$6.cloneNode(true);
+
+        insert$1(_el$17, () => g['flat_accidental']);
+
+        return _el$17;
+      }
+
+    }), createComponent$1(Show$1, {
+      get when() {
+        return props.tonic[1] === '#';
+      },
+
+      get children() {
+        const _el$18 = _tmpl$6.cloneNode(true);
+
+        insert$1(_el$18, () => g['sharp_accidental']);
+
+        return _el$18;
+      }
+
+    })];
   };
 
   const Icon = props => {
     return (() => {
-      const _el$19 = _tmpl$6.cloneNode(true);
+      const _el$19 = _tmpl$7.cloneNode(true);
 
       addEventListener(_el$19, "click", props.onClick, true);
 
