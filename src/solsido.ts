@@ -5,6 +5,7 @@ import { loop } from './play'
 import { make_midi } from './make_midi'
 import { SamplesPlayer } from './audio'
 import { short_range_flat_notes, fuzzy_note } from './audio'
+import { majorKey, perfect_c_sharps, perfect_c_flats } from './audio'
 
 const getPlayerController = async (input: boolean) => {
   if (input) {
@@ -170,86 +171,9 @@ const make_playback = (solsido: Solsido) => {
   }
 }
 
-let c_major = 'C Major'
+const make_major = (solsido: Solsido, key: Key) => {
 
-let flat_majors = [
-  'F Major',
-  'Bflat Major'
-]
-
-let sharp_majors = [
-  'G Major',
-  'D Major',
-  'F# Major'
-]
-
-let flats = {
-  'F Major': ['F4', 'B4'],
-  'Bflat Major': ['B3', 'B4', 'E5'],
-}
-
-let sharps = {
-  'G Major': ['G4', 'F5'],
-  'D Major': ['D4', 'F5', 'C5'],
-  'F# Major': ['F4', 'F5', 'C5', 'G5', 'D5', 'A4', 'E5']
-}
-
-let increasing = [...Array(8).keys()].map(_ => _ * 0.125)
-
-let notes = ['B3', 'C4', 'D4', 'E4', 'F4', 'G4', 'A4', 'B4', 'C5', 'D5', 'E5', 'F5', 'G5']
-
-const note_y = note => 0.625 - notes.indexOf(note) * 0.125
-
-const flat_bras = key => {
-  let [note, ..._flats] = flats[key]
-  return [
-    'gclef@0.2,0',
-    ..._flats.map((_, i) => `flat_accidental@${i*0.3+1.2},${note_y(_)}`),
-    ...increasing.map((_, i) => `whole_note@${i*1.3+2},${note_y(note) - _}`)
-  ]
-}
-
-const sharp_bras = key => {
-  let [note, ..._sharps] = sharps[key]
-  let i_wnote = _sharps.length
-  let g_wnote = 1.3 - (i_wnote / 8) * 0.3
-  return [
-    'gclef@0.2,0',
-    ..._sharps.map((_, i) => `sharp_accidental@${i*0.3+1.2},${note_y(_)}`),
-
-    ...increasing.map((_, i) => `whole_note@${i*g_wnote+1.5 + i_wnote * 0.3},${note_y(note) - _}`)]
-}
-
-const cmajor_bras = [
-  'gclef@0.2,0', ...increasing.map((_, i) => `whole_note@${i*1.3+1.5},${note_y('C4')-_}`)]
-
-const octave_notes = (note: string) => notes.slice(notes.indexOf(note), notes.indexOf(note) + 8)
-
-const cmajor_notes = octave_notes('C4')
-const flat_notes = key => {
-  let [note, ..._flats] = flats[key]
-  let _notes = octave_notes(note)
-
-  return _notes.map(_ => _flats.includes(_) ? _[0] + 'b' + _[1] : _)
-} 
-
-const sharp_notes = key => {
-  let [note, ..._sharps] = sharps[key]
-  let _notes = octave_notes(note)
-
-  return _notes.map(_ => _sharps.includes(_) ? _[0] + '#' + _[1] : _)
-} 
-
-const make_major = (solsido: Solsido, _major: Major) => {
-
-  let [key, major] = _major.split(' ')
-
-  let _c_major = _major === c_major
-  let _flat_major = flat_majors.includes(_major)
-  let _sharp_major = sharp_majors.includes(_major)
-
-  let _bras = _c_major ? cmajor_bras : _flat_major ? flat_bras(_major) : sharp_bras(_major)
-  let _notes = _c_major ? cmajor_notes : _flat_major ? flat_notes(_major) : sharp_notes(_major)
+  let _majorKey = majorKey(key)
 
   let _playback = createSignal(false)
   let _you = createSignal(false)
@@ -266,25 +190,16 @@ const make_major = (solsido: Solsido, _major: Major) => {
 
 
   let self = {
-    key,
     get klass() {
       return m_klass()
     },
-    get letter() {
-      return key[0]
-    },
-    get flat() {
-      return !!key.match('flat')
-    },
-    get name() {
-      return _major
+    get majorKey() {
+      return _majorKey
     },
     get bras() {
-      return [..._bras, ...read(_bras_playing)]
+      //return [..._bras, ...read(_bras_playing)]
     },
     set playing_note(note: Note) {
-      
-      //owrite(_bras_playing, note_bras(note))
     },
     get notes() {
       return _notes
@@ -361,20 +276,17 @@ const make_major = (solsido: Solsido, _major: Major) => {
 
 const make_majors = (solsido: Solsido) => {
 
-  let _majors = [
-    c_major,
-    ...flat_majors,
-    ...sharp_majors
-  ]
+  let _perfect_c_sharps = perfect_c_sharps.slice(1).map(_ => make_major(solsido, _))
+  let _perfect_c_flats = perfect_c_flats.slice(1).map(_ => make_major(solsido, _))
 
-  let m_majors = _majors.map(_ => make_major(solsido, _))
+  let _c = make_major(solsido, perfect_c_sharps[0])
 
   return {
-    get majors() {
-      return m_majors
+    get c_major() {
+      return _c
     },
-    major(key: string) {
-      return m_majors.find(_ => _.key === key)
-    }
+    get sharps_flats_zipped() {
+      return _perfect_c_sharps.map((_, i) => [_perfect_c_flats[i], _])
+    },
   }
 }

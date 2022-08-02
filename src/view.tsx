@@ -25,7 +25,7 @@ export const App = solsido => props => {
 
   return (<>
       <solsido ref={_ => setTimeout(() => solsido.ref.$ref = _)}>
-        <KeySignatures solsido={solsido}/>
+        <KeySignatures majors={solsido._majors} />
       </solsido>
      </>)
 }
@@ -36,21 +36,15 @@ const KeySignatures = props => {
   return (<>
     <h2> Major Key Signatures </h2>
     <div class='key-signatures'>
-      <div> <CMajor {...props} major={props.solsido._majors.major('C')}/> </div>
-      <div>
-        <CMajor {...props} major={props.solsido._majors.major('F')}/>
-        <CMajor {...props} major={props.solsido._majors.major('G')}/>
-      </div>
-      <div>
-        <CMajor {...props} major={props.solsido._majors.major('Bflat')}/>
-        <CMajor {...props} major={props.solsido._majors.major('D')}/>
-      </div>
-      <div>
-        <CMajor {...props} major={props.solsido._majors.major('F#')}/>
-      </div>
-
-    </div>
-    </>)
+     <div> <CMajor major={props.majors.c_major}/> </div>
+     <For each={props.majors.sharps_flats_zipped}>{major => 
+     <div>
+     <CMajor major={major[0]}/>
+     <CMajor major={major[1]}/>
+     </div>
+     }</For>
+     </div>
+  </>)
 }
 
 const you_titles = {
@@ -82,7 +76,7 @@ const CMajor = props => {
       onMouseLeave={_ => owrite(_show_controls, false) }
       onMouseOver={_ => owrite(_show_controls, true) } class="cmajor">
       <div class="header">
-      <label>{props.major.letter}<Show when={props.major.flat}><span class='bra'>{g['flat_accidental']}</span></Show> Major</label>
+      <label>{<Tonic tonic={props.major.majorKey.tonic}/>} <span class='major-type'>{props.major.majorKey.type}</span> </label>
       <div class='controls'>
         <Show when={read(_show_controls)}>
         <Icon onClick={_ => props.solsido.major_playback.set_play(props.major)} title={props.major.play}>{props.major.play}</Icon>
@@ -96,6 +90,13 @@ const CMajor = props => {
     </div>)
 }
 
+const Tonic = props => {
+  return (<>
+      {props.tonic[0]}
+      <Show when={props.tonic[1] === 'b'}><span class='bra'>{g['flat_accidental']}</span></Show>
+      <Show when={props.tonic[1] === '#'}><span class='bra'>{g['sharp_accidental']}</span></Show>
+      </>)
+}
 
 const Icon = props => {
   return <span onClick={props.onClick} title={props.title} class='icon'>{props.children}</span>
