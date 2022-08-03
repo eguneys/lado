@@ -81,3 +81,15 @@ span.bra {
   line-height: 0.5em;
   font-size: 1.1em;
 }
+
+bravura bra.live {
+  color: orange;
+}
+
+bravura bra.green {
+  color: green;
+}
+
+bravura bra.red {
+  color: red;
+}

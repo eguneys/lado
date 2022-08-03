@@ -6,7 +6,7 @@ import { make_midi } from './make_midi'
 import { SamplesPlayer } from './audio'
 import { short_range_flat_notes, fuzzy_note } from './audio'
 import { majorKey, perfect_c_sharps, perfect_c_flats } from './audio'
-import { get_note } from './audio'
+import { get_note, enharmonic } from './audio'
 
 const getPlayerController = async (input: boolean) => {
   if (input) {
@@ -72,6 +72,7 @@ const make_you = (solsido: Solsido) => {
         just_offs(offs: Array<Note>) {
           let { player } = solsido
           offs.forEach(_ => player?.release(fuzzy_note(_)))
+          v.playing_note = undefined
         }
       })
       onCleanup(() => {
@@ -151,7 +152,11 @@ const make_playback = (solsido: Solsido) => {
 }
 
 let key_to_bra = { '#': 'sharp_accidental', 'b': 'flat_accidental' }
-let key_notes = ['F5', 'C5', 'G5', 'D5', 'A4', 'E5', 'B4']
+
+let sharp_key_notes = ['F5', 'C5', 'G5', 'D5', 'A4', 'E5', 'B4']
+let flat_key_notes = ['B4', 'E5', 'A4', 'D5', 'G5', 'C5', 'F5']
+
+let key_to_notes = { undefined: [], '#': sharp_key_notes, 'b': flat_key_notes }
 
 let note_ys = 'B3 C4 D4 E4 F4 G4 A4 B4 C5 D5 E5 F5 G5 A5 B5 C6'.split(' ')
 
@@ -162,6 +167,7 @@ const note_bra_y = n => {
 const key_signatures = sig => {
   let _ = sig[0]
   let nb = sig.length
+  let key_notes = key_to_notes[_]
   return key_notes.slice(0, nb).map((n, i) => `${key_to_bra[_]}@${i * 0.3 + 1.2},${note_bra_y(n) * 0.125}`)
 }
 
@@ -195,7 +201,25 @@ const make_major = (solsido: Solsido, key: Key) => {
     read(_playback) ? 'playback' : ''
   ])
 
-  let _bras_playing = createSignal([])
+  let _playing_note = createSignal()
+
+  let _bras_playing = createMemo(() => {
+    let note = read(_playing_note)
+    if (!note) {
+      return []
+    }
+
+    let correct = _notes.find(_ => _ === note || enharmonic(_) === note)
+
+    let _note = correct || note
+    let no_flat_note = _note[0] + _note[_note.length - 1]
+
+    let klass = correct ? 'green' : 'red'
+
+    let bra_1 = `whole_note,live,${klass}@${8 * gap_note + i_wnote * 0.3 + 1.5},${note_bra_y(no_flat_note)*0.125}`
+
+    return [bra_1]
+  })
 
 
   let self = {
@@ -206,12 +230,13 @@ const make_major = (solsido: Solsido, key: Key) => {
       return _majorKey
     },
     get bras() {
-      return [..._bras]
+      return [..._bras, ..._bras_playing()]
     },
     get notes() {
       return _notes
     },
-    set playing_note(note: Note) {
+    set playing_note(note: Note | undefined) {
+      owrite(_playing_note, note)
     },
     xw_at(x: number) {
 
