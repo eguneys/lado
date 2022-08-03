@@ -4244,6 +4244,10 @@ var Lado = (function () {
       this.ref.$clear_bounds();
     }
 
+    get style() {
+      return this.m_style();
+    }
+
     set bras(bras) {
       this.sheet.bras = bras;
     }
@@ -4274,44 +4278,11 @@ var Lado = (function () {
 
     constructor() {
       this.ref = make_ref();
+      this.m_style = createMemo(() => ({
+        'font-size': `${(this.ref.size?.y || 0) / 4}px`
+      }));
       this.sheet = make_sheet(this);
       this.playback = make_playback();
-      /*
-      this.bras = [
-        'gclef@0,0',
-        'four_time@1,0',
-        'four_time@1,-0.5',
-        'sharp_accidental@2.125,-0.750',
-        'sharp_accidental@2.5,-0.50',
-        'sharp_accidental@1.75,-0.50',
-        'quarter_note@4,0.5',
-        'quarter_note@5,0.5',
-        'quarter_note@6,0',
-        'eighth_flag_up@6.265,-0.85',
-        'sixtyfourth_flag_down@6,0.85',
-      ]
-        this.sheet.ledgers = [
-        '@4,0.750',
-        '@5,0.5',
-        '@5,0.750'
-      ]
-        this.sheet.bars = [
-        '@7'
-      ]
-        this.sheet.stems = [
-        '@6.265,-0.04,0.75',
-        `@6,${0.75+0.04},0.75`,
-        `@4.265,${0.5-0.04},0.75`,
-        `@5.265,${0.5-0.04},0.75`,
-      ]
-        this.sheet.beams = [
-        `@4.265,${0.5-0.04},${0.5-0.04}`,
-        `@5.265,${0.5-0.04},${-0.04}`
-      ]
-        this.sheet.ties = [
-        `flip@4.125,1.5,5.125`
-      ]
-      */
     }
 
   }
@@ -4657,7 +4628,7 @@ var Lado = (function () {
         _tmpl$5$1 = /*#__PURE__*/template(`<stem></stem>`),
         _tmpl$6$1 = /*#__PURE__*/template(`<bra></bra>`),
         _tmpl$7$1 = /*#__PURE__*/template(`<tie><svg width="1em" height="1em" viewBox="0 0 100 100"><path></path></svg></tie>`),
-        _tmpl$8 = /*#__PURE__*/template(`<beam><svg width="1em" height="1em" viewBox="0 0 100 100"><path></path></svg></beam>`);
+        _tmpl$8$1 = /*#__PURE__*/template(`<beam><svg width="1em" height="1em" viewBox="0 0 100 100"><path></path></svg></beam>`);
 
   function unbindable$1(el, eventName, callback, options) {
     el.addEventListener(eventName, callback, options);
@@ -4813,6 +4784,8 @@ var Lado = (function () {
         })()
       }));
 
+      createRenderEffect(_$p => style(_el$, staff.style, _$p));
+
       return _el$;
     })();
   };
@@ -4857,7 +4830,7 @@ var Lado = (function () {
   const Beam = props => {
     props.y2;
     return (() => {
-      const _el$16 = _tmpl$8.cloneNode(true),
+      const _el$16 = _tmpl$8$1.cloneNode(true),
             _el$17 = _el$16.firstChild,
             _el$18 = _el$17.firstChild;
 
@@ -4881,6 +4854,8 @@ var Lado = (function () {
     let staff = new Staff(element);
     render(App$1(staff), element);
     return {
+      sheet: staff.sheet,
+
       set bras(bras) {
         staff.bras = bras;
       },
@@ -4998,12 +4973,15 @@ var Lado = (function () {
   };
 
   const _tmpl$ = /*#__PURE__*/template$1(`<solsido></solsido>`),
-        _tmpl$2 = /*#__PURE__*/template$1(`<h2> Major Key Signatures </h2>`),
-        _tmpl$3 = /*#__PURE__*/template$1(`<div class="key-signatures"><div> <!> </div></div>`),
-        _tmpl$4 = /*#__PURE__*/template$1(`<div></div>`),
-        _tmpl$5 = /*#__PURE__*/template$1(`<div class="cmajor"><div class="header"><label> <span class="major-type"></span> </label><div class="controls"></div></div><div><div> </div></div></div>`),
-        _tmpl$6 = /*#__PURE__*/template$1(`<span class="bra"></span>`),
-        _tmpl$7 = /*#__PURE__*/template$1(`<span class="icon"></span>`);
+        _tmpl$2 = /*#__PURE__*/template$1(`<h2> Major Key Exercise </h2>`),
+        _tmpl$3 = /*#__PURE__*/template$1(`<div class="key-exercise"><div> <!> </div></div>`),
+        _tmpl$4 = /*#__PURE__*/template$1(`<h2> Major Key Signatures </h2>`),
+        _tmpl$5 = /*#__PURE__*/template$1(`<div class="key-signatures"><div> <!> </div></div>`),
+        _tmpl$6 = /*#__PURE__*/template$1(`<div></div>`),
+        _tmpl$7 = /*#__PURE__*/template$1(`<div class="cmajor-exercise"><div class="header"></div><div></div></div>`),
+        _tmpl$8 = /*#__PURE__*/template$1(`<div class="cmajor"><div class="header"><label> <span class="major-type"></span> </label><div class="controls"></div></div><div><div> </div></div></div>`),
+        _tmpl$9 = /*#__PURE__*/template$1(`<span class="bra"></span>`),
+        _tmpl$10 = /*#__PURE__*/template$1(`<span class="icon"></span>`);
 
   function unbindable(el, eventName, callback, options) {
     el.addEventListener(eventName, callback, options);
@@ -5025,18 +5003,20 @@ var Lado = (function () {
 
       (_ => setTimeout(() => solsido.ref.$ref = _))(_el$);
 
+      insert$1(_el$, createComponent$1(KeyExercises, {}), null);
+
       insert$1(_el$, createComponent$1(KeySignatures, {
         get majors() {
           return solsido._majors;
         }
 
-      }));
+      }), null);
 
       return _el$;
     })();
   };
 
-  const KeySignatures = props => {
+  const KeyExercises = props => {
     return [_tmpl$2.cloneNode(true), (() => {
       const _el$3 = _tmpl$3.cloneNode(true),
             _el$4 = _el$3.firstChild,
@@ -5044,41 +5024,92 @@ var Lado = (function () {
             _el$7 = _el$5.nextSibling;
             _el$7.nextSibling;
 
-      insert$1(_el$4, createComponent$1(CMajor, {
+      insert$1(_el$4, createComponent$1(CMajorExercise, {}), _el$7);
+
+      return _el$3;
+    })()];
+  };
+
+  const KeySignatures = props => {
+    return [_tmpl$4.cloneNode(true), (() => {
+      const _el$9 = _tmpl$5.cloneNode(true),
+            _el$10 = _el$9.firstChild,
+            _el$11 = _el$10.firstChild,
+            _el$13 = _el$11.nextSibling;
+            _el$13.nextSibling;
+
+      insert$1(_el$10, createComponent$1(CMajor, {
         get major() {
           return props.majors.c_major;
         }
 
-      }), _el$7);
+      }), _el$13);
 
-      insert$1(_el$3, createComponent$1(For$1, {
+      insert$1(_el$9, createComponent$1(For$1, {
         get each() {
           return props.majors.sharps_flats_zipped;
         },
 
         children: major => (() => {
-          const _el$8 = _tmpl$4.cloneNode(true);
+          const _el$14 = _tmpl$6.cloneNode(true);
 
-          insert$1(_el$8, createComponent$1(CMajor, {
+          insert$1(_el$14, createComponent$1(CMajor, {
             get major() {
               return major[0];
             }
 
           }), null);
 
-          insert$1(_el$8, createComponent$1(CMajor, {
+          insert$1(_el$14, createComponent$1(CMajor, {
             get major() {
               return major[1];
             }
 
           }), null);
 
-          return _el$8;
+          return _el$14;
         })()
       }), null);
 
-      return _el$3;
+      return _el$9;
     })()];
+  };
+
+  const _VStaff = props => {
+    let $ref;
+    onMount(() => {
+      let api = VStaff($ref);
+      createEffect(() => {
+        api.bras = props.bras;
+      });
+      createEffect(() => {
+        api.xwi = props.xwi || '';
+      });
+      createEffect(() => {
+        api.playback = props.playback;
+      });
+    });
+    return (() => {
+      const _el$15 = _tmpl$6.cloneNode(true);
+
+      const _ref$ = $ref;
+      typeof _ref$ === "function" ? _ref$(_el$15) : $ref = _el$15;
+      return _el$15;
+    })();
+  };
+
+  const CMajorExercise = props => {
+    return (() => {
+      const _el$16 = _tmpl$7.cloneNode(true),
+            _el$17 = _el$16.firstChild,
+            _el$18 = _el$17.nextSibling;
+
+      insert$1(_el$18, createComponent$1(_VStaff, {}));
+
+      createRenderEffect$1(() => className$1(_el$18, ['major-staff'].join(' ')));
+
+      return _el$16;
+    })();
   };
 
   const you_titles = {
@@ -5104,29 +5135,29 @@ var Lado = (function () {
     let _show_controls = createSignal$1(false);
 
     return (() => {
-      const _el$9 = _tmpl$5.cloneNode(true),
-            _el$10 = _el$9.firstChild,
-            _el$11 = _el$10.firstChild,
-            _el$12 = _el$11.firstChild,
-            _el$13 = _el$12.nextSibling,
-            _el$14 = _el$11.nextSibling,
-            _el$15 = _el$10.nextSibling,
-            _el$16 = _el$15.firstChild;
+      const _el$19 = _tmpl$8.cloneNode(true),
+            _el$20 = _el$19.firstChild,
+            _el$21 = _el$20.firstChild,
+            _el$22 = _el$21.firstChild,
+            _el$23 = _el$22.nextSibling,
+            _el$24 = _el$21.nextSibling,
+            _el$25 = _el$20.nextSibling,
+            _el$26 = _el$25.firstChild;
 
-      _el$9.$$mouseover = _ => owrite$1(_show_controls, true);
+      _el$19.$$mouseover = _ => owrite$1(_show_controls, true);
 
-      _el$9.addEventListener("mouseleave", _ => owrite$1(_show_controls, false));
+      _el$19.addEventListener("mouseleave", _ => owrite$1(_show_controls, false));
 
-      insert$1(_el$11, () => createComponent$1(Tonic, {
+      insert$1(_el$21, () => createComponent$1(Tonic, {
         get tonic() {
           return props.major.majorKey.tonic;
         }
 
-      }), _el$12);
+      }), _el$22);
 
-      insert$1(_el$13, () => props.major.majorKey.type);
+      insert$1(_el$23, () => props.major.majorKey.type);
 
-      insert$1(_el$14, createComponent$1(Show$1, {
+      insert$1(_el$24, createComponent$1(Show$1, {
         get when() {
           return read$1(_show_controls);
         },
@@ -5159,12 +5190,12 @@ var Lado = (function () {
 
       }));
 
-      const _ref$ = $ref;
-      typeof _ref$ === "function" ? _ref$(_el$16) : $ref = _el$16;
+      const _ref$2 = $ref;
+      typeof _ref$2 === "function" ? _ref$2(_el$26) : $ref = _el$26;
 
-      createRenderEffect$1(() => className$1(_el$15, ['major-staff', ...props.major.klass].join(' ')));
+      createRenderEffect$1(() => className$1(_el$25, ['major-staff', ...props.major.klass].join(' ')));
 
-      return _el$9;
+      return _el$19;
     })();
   };
 
@@ -5175,11 +5206,11 @@ var Lado = (function () {
       },
 
       get children() {
-        const _el$17 = _tmpl$6.cloneNode(true);
+        const _el$27 = _tmpl$9.cloneNode(true);
 
-        insert$1(_el$17, () => g['flat_accidental']);
+        insert$1(_el$27, () => g['flat_accidental']);
 
-        return _el$17;
+        return _el$27;
       }
 
     }), createComponent$1(Show$1, {
@@ -5188,11 +5219,11 @@ var Lado = (function () {
       },
 
       get children() {
-        const _el$18 = _tmpl$6.cloneNode(true);
+        const _el$28 = _tmpl$9.cloneNode(true);
 
-        insert$1(_el$18, () => g['sharp_accidental']);
+        insert$1(_el$28, () => g['sharp_accidental']);
 
-        return _el$18;
+        return _el$28;
       }
 
     })];
@@ -5200,15 +5231,15 @@ var Lado = (function () {
 
   const Icon = props => {
     return (() => {
-      const _el$19 = _tmpl$7.cloneNode(true);
+      const _el$29 = _tmpl$10.cloneNode(true);
 
-      addEventListener(_el$19, "click", props.onClick, true);
+      addEventListener(_el$29, "click", props.onClick, true);
 
-      insert$1(_el$19, () => props.children);
+      insert$1(_el$29, () => props.children);
 
-      createRenderEffect$1(() => setAttribute$1(_el$19, "title", props.title));
+      createRenderEffect$1(() => setAttribute$1(_el$29, "title", props.title));
 
-      return _el$19;
+      return _el$29;
     })();
   };
 
