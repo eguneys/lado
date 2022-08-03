@@ -12,6 +12,8 @@ export const fuzzy_note = _ => {
   return Note.fromFreq(__.freq)
 }
 
+export const get_note = _ => Note.get(_)
+
 export const perfect_c_sharps = [...Array(7)].reduce((acc, _) => [...acc, transpose(acc[acc.length - 1], 'P5')], ['C'])
 export const perfect_c_flats = [...Array(7)].reduce((acc, _) => [...acc, transpose(acc[acc.length - 1], 'P4')], ['C'])
 

@@ -6,6 +6,7 @@ import { make_midi } from './make_midi'
 import { SamplesPlayer } from './audio'
 import { short_range_flat_notes, fuzzy_note } from './audio'
 import { majorKey, perfect_c_sharps, perfect_c_flats } from './audio'
+import { get_note } from './audio'
 
 const getPlayerController = async (input: boolean) => {
   if (input) {
@@ -99,20 +100,6 @@ const make_playback = (solsido: Solsido) => {
 
   let _major = createSignal()
 
-  let m_bras = createMemo(() => read(_major)?.bras)
-
-  let m_off_bras = createMemo(() => {
-    let bras = m_bras()
-    if (bras) {
-      let _ = bras.find(_ => _.match('whole_note'))
-
-      let [__,rest] = _.split('@')
-
-      return parseFloat(rest.split(',')[0])
-    }
-    return 0
-  })
-
   let bpm = 120
   let note_per_beat = 2
 
@@ -171,9 +158,37 @@ const make_playback = (solsido: Solsido) => {
   }
 }
 
+let key_to_bra = { '#': 'sharp_accidental', 'b': 'flat_accidental' }
+let key_notes = ['F5', 'C5', 'G5', 'D5', 'A4', 'E5', 'B4']
+
+let note_ys = 'B3 C4 D4 E4 F4 G4 A4 B4 C5 D5 E5 F5 G5 A5 B5 C6'.split(' ')
+
+const note_bra_y = n => {
+  return note_ys.indexOf('G4') - note_ys.indexOf(n)
+}
+
+const key_signatures = sig => {
+  let _ = sig[0]
+  let nb = sig.length
+  return key_notes.slice(0, nb).map((n, i) => `${key_to_bra[_]}@${i * 0.3 + 1.2},${note_bra_y(n) * 0.125}`)
+}
+
+const scale_in_notes = scale => {
+
+  let i_note_index = note_ys.findIndex(_ => _[0] === scale[0][0])
+
+  return note_ys.slice(i_note_index, i_note_index + scale.length + 1)
+}
+
 const make_major = (solsido: Solsido, key: Key) => {
 
   let _majorKey = majorKey(key)
+
+  let __ns = scale_in_notes(_majorKey.scale)
+  let __ks = key_signatures(_majorKey.keySignature)
+  let i_wnote = __ks.length
+  let gap_note = 1.3 - (i_wnote / 8) * 0.3
+  let _bras = ['gclef@0.2,0', ...__ks, ...__ns.map((_, i) => `whole_note@${i * gap_note + i_wnote * 0.3 + 1.5},${note_bra_y(_)*0.125}`)]
 
   let _playback = createSignal(false)
   let _you = createSignal(false)
@@ -197,12 +212,9 @@ const make_major = (solsido: Solsido, key: Key) => {
       return _majorKey
     },
     get bras() {
-      //return [..._bras, ...read(_bras_playing)]
+      return [..._bras]
     },
     set playing_note(note: Note) {
-    },
-    get notes() {
-      return _notes
     },
     xw_at(x: number) {
 
