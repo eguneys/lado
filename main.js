@@ -3058,12 +3058,6 @@ var Lado = (function () {
 
       stop_major(major) {
         owrite$1(_major, _ => _ === major ? undefined : _);
-      },
-
-      set_play(major) {
-        owrite$1(solsido._user_click, true);
-
-        solsido._majors.majors.forEach(_ => _.set_play_you(_ === major));
       }
 
     };
@@ -3072,20 +3066,6 @@ var Lado = (function () {
   const make_playback$1 = solsido => {
     let _major = createSignal$1();
 
-    let m_bras = createMemo$1(() => read$1(_major)?.bras);
-    createMemo$1(() => {
-      let bras = m_bras();
-
-      if (bras) {
-        let _ = bras.find(_ => _.match('whole_note'));
-
-        let [__, rest] = _.split('@');
-
-        return parseFloat(rest.split(',')[0]);
-      }
-
-      return 0;
-    });
     let bpm = 120;
     let note_per_beat = 2;
     let note_p_m = bpm * note_per_beat;
@@ -3135,19 +3115,45 @@ var Lado = (function () {
 
       stop_major(major) {
         owrite$1(_major, _ => _ === major ? undefined : _);
-      },
-
-      set_play(major) {
-        owrite$1(solsido._user_click, true);
-
-        solsido._majors.majors.forEach(_ => _.set_play(_ === major));
       }
 
     };
   };
 
+  let key_to_bra = {
+    '#': 'sharp_accidental',
+    'b': 'flat_accidental'
+  };
+  let key_notes = ['F5', 'C5', 'G5', 'D5', 'A4', 'E5', 'B4'];
+  let note_ys = 'B3 C4 D4 E4 F4 G4 A4 B4 C5 D5 E5 F5 G5 A5 B5 C6'.split(' ');
+
+  const note_bra_y = n => {
+    return note_ys.indexOf('G4') - note_ys.indexOf(n);
+  };
+
+  const key_signatures = sig => {
+    let _ = sig[0];
+    let nb = sig.length;
+    return key_notes.slice(0, nb).map((n, i) => `${key_to_bra[_]}@${i * 0.3 + 1.2},${note_bra_y(n) * 0.125}`);
+  };
+
+  const scale_in_notes = scale => {
+    let i_note_index = note_ys.findIndex(_ => _[0] === scale[0][0]);
+    return note_ys.slice(i_note_index, i_note_index + scale.length + 1);
+  };
+
   const make_major = (solsido, key) => {
     let _majorKey = majorKey(key);
+
+    let __ns = scale_in_notes(_majorKey.scale);
+
+    let __ks = key_signatures(_majorKey.keySignature);
+
+    let i_wnote = __ks.length;
+    let gap_note = 1.3 - i_wnote / 8 * 0.3;
+    let _bras = ['gclef@0.2,0', ...__ks, ...__ns.map((_, i) => `whole_note@${i * gap_note + i_wnote * 0.3 + 1.5},${note_bra_y(_) * 0.125}`)];
+
+    let _notes = __ns.map(n => _majorKey.scale.find(_ => _[0] === n[0]) + n[1]);
 
     let _playback = createSignal$1(false);
 
@@ -3168,14 +3174,15 @@ var Lado = (function () {
         return _majorKey;
       },
 
-      get bras() {//return [..._bras, ...read(_bras_playing)]
+      get bras() {
+        return [..._bras];
       },
-
-      set playing_note(note) {},
 
       get notes() {
         return _notes;
       },
+
+      set playing_note(note) {},
 
       xw_at(x) {
         let i_n = _bras.findIndex(_ => _.match('whole_note'));
@@ -3193,20 +3200,32 @@ var Lado = (function () {
         return [parseFloat(xx), parseFloat(x2) - parseFloat(x1)];
       },
 
-      get play() {
+      get play_mode() {
         return read$1(_playback) ? 'stop' : 'play';
-      },
-
-      set_play(v) {
-        owrite$1(_playback, _ => v ? !_ : false);
       },
 
       get you_mode() {
         return read$1(_you) ? 'stop' : 'you';
       },
 
-      set_play_you(v) {
+      set_play(v) {
+        owrite$1(_playback, _ => v ? !_ : false);
+      },
+
+      set_you(v) {
         owrite$1(_you, _ => v ? !_ : false);
+      },
+
+      click_play() {
+        owrite$1(solsido._user_click, true);
+
+        solsido._majors.majors.forEach(_ => _.set_play(_ === this));
+      },
+
+      click_you() {
+        owrite$1(solsido._user_click, true);
+
+        solsido._majors.majors.forEach(_ => _.set_you(_ === this));
       },
 
       get you() {
@@ -3255,6 +3274,10 @@ var Lado = (function () {
     let _c = make_major(solsido, perfect_c_sharps[0]);
 
     return {
+      get majors() {
+        return [..._perfect_c_sharps, ..._perfect_c_flats, _c];
+      },
+
       get c_major() {
         return _c;
       },
@@ -5068,18 +5091,18 @@ var Lado = (function () {
 
         get children() {
           return [createComponent$1(Icon, {
-            onClick: _ => props.solsido.major_playback.set_play(props.major),
+            onClick: _ => props.major.click_play(),
 
             get title() {
-              return props.major.play;
+              return props.major.play_mode;
             },
 
             get children() {
-              return props.major.play;
+              return props.major.play_mode;
             }
 
           }), createComponent$1(Icon, {
-            onClick: _ => props.solsido.major_you.set_play(props.major),
+            onClick: _ => props.major.click_you(),
 
             get title() {
               return you_titles[props.major.you_mode];
