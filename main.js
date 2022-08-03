@@ -4974,14 +4974,15 @@ var Lado = (function () {
 
   const _tmpl$ = /*#__PURE__*/template$1(`<solsido></solsido>`),
         _tmpl$2 = /*#__PURE__*/template$1(`<h2> Major Key Exercise </h2>`),
-        _tmpl$3 = /*#__PURE__*/template$1(`<div class="key-exercise"><div> <!> </div></div>`),
-        _tmpl$4 = /*#__PURE__*/template$1(`<h2> Major Key Signatures </h2>`),
-        _tmpl$5 = /*#__PURE__*/template$1(`<div class="key-signatures"><div> <!> </div></div>`),
-        _tmpl$6 = /*#__PURE__*/template$1(`<div></div>`),
-        _tmpl$7 = /*#__PURE__*/template$1(`<div class="cmajor-exercise"><div class="header"></div><div></div></div>`),
-        _tmpl$8 = /*#__PURE__*/template$1(`<div class="cmajor"><div class="header"><label> <span class="major-type"></span> </label><div class="controls"></div></div><div><div> </div></div></div>`),
-        _tmpl$9 = /*#__PURE__*/template$1(`<span class="bra"></span>`),
-        _tmpl$10 = /*#__PURE__*/template$1(`<span class="icon"></span>`);
+        _tmpl$3 = /*#__PURE__*/template$1(`<div class="key-controls"><group class="radio"><div><input id="time_min" name="time" type="radio"><label for="time_min">1 Min.</label></div><div><input id="time_no" name="time" type="radio"><label for="time_no">No time</label></div></group><group class="radio"><div><input id="order_random" name="order" type="radio"><label for="order_random"> Random </label></div><div><input id="order_sorted" name="order" type="radio"><label for="order_sorted"> Sorted </label></div></group><group class="radio"><div><input id="nb_all" name="nb" type="radio"><label for="nb_all"> All </label></div><div><input id="nb_sharps" name="nb" type="radio"><label for="nb_sharps">Sharps</label></div><div><input id="nb_flats" name="nb" type="radio"><label for="nb_flats">Flats</label></div></group><span class="icon"> Start </span></div>`),
+        _tmpl$4 = /*#__PURE__*/template$1(`<div class="key-exercise"><div> <!> </div></div>`),
+        _tmpl$5 = /*#__PURE__*/template$1(`<h2> Major Key Signatures </h2>`),
+        _tmpl$6 = /*#__PURE__*/template$1(`<div class="key-signatures"><div> <!> </div></div>`),
+        _tmpl$7 = /*#__PURE__*/template$1(`<div></div>`),
+        _tmpl$8 = /*#__PURE__*/template$1(`<div class="cmajor-exercise"><div class="header"></div><div></div></div>`),
+        _tmpl$9 = /*#__PURE__*/template$1(`<div class="cmajor"><div class="header"><label> <span class="major-type"></span> </label><div class="controls"></div></div><div><div> </div></div></div>`),
+        _tmpl$10 = /*#__PURE__*/template$1(`<span class="bra"></span>`),
+        _tmpl$11 = /*#__PURE__*/template$1(`<span class="icon"></span>`);
 
   function unbindable(el, eventName, callback, options) {
     el.addEventListener(eventName, callback, options);
@@ -5021,57 +5022,73 @@ var Lado = (function () {
       const _el$3 = _tmpl$3.cloneNode(true),
             _el$4 = _el$3.firstChild,
             _el$5 = _el$4.firstChild,
-            _el$7 = _el$5.nextSibling;
-            _el$7.nextSibling;
+            _el$6 = _el$5.firstChild,
+            _el$7 = _el$4.nextSibling,
+            _el$8 = _el$7.firstChild,
+            _el$9 = _el$8.firstChild,
+            _el$10 = _el$7.nextSibling,
+            _el$11 = _el$10.firstChild,
+            _el$12 = _el$11.firstChild;
 
-      insert$1(_el$4, createComponent$1(CMajorExercise, {}), _el$7);
-
+      _el$6.checked = true;
+      _el$9.checked = true;
+      _el$12.checked = true;
       return _el$3;
+    })(), (() => {
+      const _el$13 = _tmpl$4.cloneNode(true),
+            _el$14 = _el$13.firstChild,
+            _el$15 = _el$14.firstChild,
+            _el$17 = _el$15.nextSibling;
+            _el$17.nextSibling;
+
+      insert$1(_el$14, createComponent$1(CMajorExercise, {}), _el$17);
+
+      return _el$13;
     })()];
   };
 
   const KeySignatures = props => {
-    return [_tmpl$4.cloneNode(true), (() => {
-      const _el$9 = _tmpl$5.cloneNode(true),
-            _el$10 = _el$9.firstChild,
-            _el$11 = _el$10.firstChild,
-            _el$13 = _el$11.nextSibling;
-            _el$13.nextSibling;
+    return [_tmpl$5.cloneNode(true), (() => {
+      const _el$19 = _tmpl$6.cloneNode(true),
+            _el$20 = _el$19.firstChild,
+            _el$21 = _el$20.firstChild,
+            _el$23 = _el$21.nextSibling;
+            _el$23.nextSibling;
 
-      insert$1(_el$10, createComponent$1(CMajor, {
+      insert$1(_el$20, createComponent$1(CMajor, {
         get major() {
           return props.majors.c_major;
         }
 
-      }), _el$13);
+      }), _el$23);
 
-      insert$1(_el$9, createComponent$1(For$1, {
+      insert$1(_el$19, createComponent$1(For$1, {
         get each() {
           return props.majors.sharps_flats_zipped;
         },
 
         children: major => (() => {
-          const _el$14 = _tmpl$6.cloneNode(true);
+          const _el$24 = _tmpl$7.cloneNode(true);
 
-          insert$1(_el$14, createComponent$1(CMajor, {
+          insert$1(_el$24, createComponent$1(CMajor, {
             get major() {
               return major[0];
             }
 
           }), null);
 
-          insert$1(_el$14, createComponent$1(CMajor, {
+          insert$1(_el$24, createComponent$1(CMajor, {
             get major() {
               return major[1];
             }
 
           }), null);
 
-          return _el$14;
+          return _el$24;
         })()
       }), null);
 
-      return _el$9;
+      return _el$19;
     })()];
   };
 
@@ -5090,25 +5107,25 @@ var Lado = (function () {
       });
     });
     return (() => {
-      const _el$15 = _tmpl$6.cloneNode(true);
+      const _el$25 = _tmpl$7.cloneNode(true);
 
       const _ref$ = $ref;
-      typeof _ref$ === "function" ? _ref$(_el$15) : $ref = _el$15;
-      return _el$15;
+      typeof _ref$ === "function" ? _ref$(_el$25) : $ref = _el$25;
+      return _el$25;
     })();
   };
 
   const CMajorExercise = props => {
     return (() => {
-      const _el$16 = _tmpl$7.cloneNode(true),
-            _el$17 = _el$16.firstChild,
-            _el$18 = _el$17.nextSibling;
+      const _el$26 = _tmpl$8.cloneNode(true),
+            _el$27 = _el$26.firstChild,
+            _el$28 = _el$27.nextSibling;
 
-      insert$1(_el$18, createComponent$1(_VStaff, {}));
+      insert$1(_el$28, createComponent$1(_VStaff, {}));
 
-      createRenderEffect$1(() => className$1(_el$18, ['major-staff'].join(' ')));
+      createRenderEffect$1(() => className$1(_el$28, ['major-staff'].join(' ')));
 
-      return _el$16;
+      return _el$26;
     })();
   };
 
@@ -5135,29 +5152,29 @@ var Lado = (function () {
     let _show_controls = createSignal$1(false);
 
     return (() => {
-      const _el$19 = _tmpl$8.cloneNode(true),
-            _el$20 = _el$19.firstChild,
-            _el$21 = _el$20.firstChild,
-            _el$22 = _el$21.firstChild,
-            _el$23 = _el$22.nextSibling,
-            _el$24 = _el$21.nextSibling,
-            _el$25 = _el$20.nextSibling,
-            _el$26 = _el$25.firstChild;
+      const _el$29 = _tmpl$9.cloneNode(true),
+            _el$30 = _el$29.firstChild,
+            _el$31 = _el$30.firstChild,
+            _el$32 = _el$31.firstChild,
+            _el$33 = _el$32.nextSibling,
+            _el$34 = _el$31.nextSibling,
+            _el$35 = _el$30.nextSibling,
+            _el$36 = _el$35.firstChild;
 
-      _el$19.$$mouseover = _ => owrite$1(_show_controls, true);
+      _el$29.$$mouseover = _ => owrite$1(_show_controls, true);
 
-      _el$19.addEventListener("mouseleave", _ => owrite$1(_show_controls, false));
+      _el$29.addEventListener("mouseleave", _ => owrite$1(_show_controls, false));
 
-      insert$1(_el$21, () => createComponent$1(Tonic, {
+      insert$1(_el$31, () => createComponent$1(Tonic, {
         get tonic() {
           return props.major.majorKey.tonic;
         }
 
-      }), _el$22);
+      }), _el$32);
 
-      insert$1(_el$23, () => props.major.majorKey.type);
+      insert$1(_el$33, () => props.major.majorKey.type);
 
-      insert$1(_el$24, createComponent$1(Show$1, {
+      insert$1(_el$34, createComponent$1(Show$1, {
         get when() {
           return read$1(_show_controls);
         },
@@ -5191,11 +5208,11 @@ var Lado = (function () {
       }));
 
       const _ref$2 = $ref;
-      typeof _ref$2 === "function" ? _ref$2(_el$26) : $ref = _el$26;
+      typeof _ref$2 === "function" ? _ref$2(_el$36) : $ref = _el$36;
 
-      createRenderEffect$1(() => className$1(_el$25, ['major-staff', ...props.major.klass].join(' ')));
+      createRenderEffect$1(() => className$1(_el$35, ['major-staff', ...props.major.klass].join(' ')));
 
-      return _el$19;
+      return _el$29;
     })();
   };
 
@@ -5206,11 +5223,11 @@ var Lado = (function () {
       },
 
       get children() {
-        const _el$27 = _tmpl$9.cloneNode(true);
+        const _el$37 = _tmpl$10.cloneNode(true);
 
-        insert$1(_el$27, () => g['flat_accidental']);
+        insert$1(_el$37, () => g['flat_accidental']);
 
-        return _el$27;
+        return _el$37;
       }
 
     }), createComponent$1(Show$1, {
@@ -5219,11 +5236,11 @@ var Lado = (function () {
       },
 
       get children() {
-        const _el$28 = _tmpl$9.cloneNode(true);
+        const _el$38 = _tmpl$10.cloneNode(true);
 
-        insert$1(_el$28, () => g['sharp_accidental']);
+        insert$1(_el$38, () => g['sharp_accidental']);
 
-        return _el$28;
+        return _el$38;
       }
 
     })];
@@ -5231,15 +5248,15 @@ var Lado = (function () {
 
   const Icon = props => {
     return (() => {
-      const _el$29 = _tmpl$10.cloneNode(true);
+      const _el$39 = _tmpl$11.cloneNode(true);
 
-      addEventListener(_el$29, "click", props.onClick, true);
+      addEventListener(_el$39, "click", props.onClick, true);
 
-      insert$1(_el$29, () => props.children);
+      insert$1(_el$39, () => props.children);
 
-      createRenderEffect$1(() => setAttribute$1(_el$29, "title", props.title));
+      createRenderEffect$1(() => setAttribute$1(_el$39, "title", props.title));
 
-      return _el$29;
+      return _el$39;
     })();
   };
 
