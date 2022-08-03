@@ -2590,7 +2590,7 @@ var Lado = (function () {
    * Note.enharmonic("C") // => "C"
    * Note.enharmonic("F2","E#") // => "E#2"
    */
-  function enharmonic(noteName, destName) {
+  function enharmonic$1(noteName, destName) {
       const src = get$2(noteName);
       if (src.empty) {
           return "";
@@ -2648,7 +2648,7 @@ var Lado = (function () {
       transposeFifths,
       trFifths,
       simplify,
-      enharmonic,
+      enharmonic: enharmonic$1,
   };
 
   const NoRomanNumeral = { empty: true, name: "", chordType: "" };
@@ -2979,6 +2979,7 @@ var Lado = (function () {
 
     return index$3.fromFreq(__.freq);
   };
+  const enharmonic = _ => index$3.enharmonic(_);
   const perfect_c_sharps = [...Array(7)].reduce((acc, _) => [...acc, transpose$1(acc[acc.length - 1], 'P5')], ['C']);
   const perfect_c_flats = [...Array(7)].reduce((acc, _) => [...acc, transpose$1(acc[acc.length - 1], 'P4')], ['C']);
   const majorKey = _ => index$2.majorKey(_);
@@ -3043,6 +3044,7 @@ var Lado = (function () {
               player
             } = solsido;
             offs.forEach(_ => player?.release(fuzzy_note(_)));
+            v.playing_note = undefined;
           }
 
         });
@@ -3124,7 +3126,13 @@ var Lado = (function () {
     '#': 'sharp_accidental',
     'b': 'flat_accidental'
   };
-  let key_notes = ['F5', 'C5', 'G5', 'D5', 'A4', 'E5', 'B4'];
+  let sharp_key_notes = ['F5', 'C5', 'G5', 'D5', 'A4', 'E5', 'B4'];
+  let flat_key_notes = ['B4', 'E5', 'A4', 'D5', 'G5', 'C5', 'F5'];
+  let key_to_notes = {
+    undefined: [],
+    '#': sharp_key_notes,
+    'b': flat_key_notes
+  };
   let note_ys = 'B3 C4 D4 E4 F4 G4 A4 B4 C5 D5 E5 F5 G5 A5 B5 C6'.split(' ');
 
   const note_bra_y = n => {
@@ -3134,6 +3142,7 @@ var Lado = (function () {
   const key_signatures = sig => {
     let _ = sig[0];
     let nb = sig.length;
+    let key_notes = key_to_notes[_];
     return key_notes.slice(0, nb).map((n, i) => `${key_to_bra[_]}@${i * 0.3 + 1.2},${note_bra_y(n) * 0.125}`);
   };
 
@@ -3163,7 +3172,24 @@ var Lado = (function () {
 
     let m_klass = createMemo$1(() => [read$1(_you) ? 'you' : '', read$1(_playback) ? 'playback' : '']);
 
-    createSignal$1([]);
+    let _playing_note = createSignal$1();
+
+    let _bras_playing = createMemo$1(() => {
+      let note = read$1(_playing_note);
+
+      if (!note) {
+        return [];
+      }
+
+      let correct = _notes.find(_ => _ === note || enharmonic(_) === note);
+
+      let _note = correct || note;
+
+      let no_flat_note = _note[0] + _note[_note.length - 1];
+      let klass = correct ? 'green' : 'red';
+      let bra_1 = `whole_note,live,${klass}@${8 * gap_note + i_wnote * 0.3 + 1.5},${note_bra_y(no_flat_note) * 0.125}`;
+      return [bra_1];
+    });
 
     let self = {
       get klass() {
@@ -3175,14 +3201,16 @@ var Lado = (function () {
       },
 
       get bras() {
-        return [..._bras];
+        return [..._bras, ..._bras_playing()];
       },
 
       get notes() {
         return _notes;
       },
 
-      set playing_note(note) {},
+      set playing_note(note) {
+        owrite$1(_playing_note, note);
+      },
 
       xw_at(x) {
         let i_n = _bras.findIndex(_ => _.match('whole_note'));
@@ -4423,12 +4451,17 @@ var Lado = (function () {
   };
 
   const make_bra = (staff, bra) => {
-    let [glyph, o_pos] = bra.split('@');
+    let [glyph_klass, o_pos] = bra.split('@');
     let [x, y] = o_pos.split(',');
+    let [glyph, ...klass] = glyph_klass.split(',');
     const m_style = createMemo(() => ({
       transform: `translate(${x}em, ${y}em)`
     }));
     return {
+      get klass() {
+        return klass.join(' ');
+      },
+
       get glyph() {
         return glyph;
       },
@@ -4765,7 +4798,16 @@ var Lado = (function () {
 
           insert(_el$12, () => g$1[bra.glyph]);
 
-          createRenderEffect(_$p => style(_el$12, bra.style, _$p));
+          createRenderEffect(_p$ => {
+            const _v$3 = bra.klass,
+                  _v$4 = bra.style;
+            _v$3 !== _p$._v$3 && className(_el$12, _p$._v$3 = _v$3);
+            _p$._v$4 = style(_el$12, _v$4, _p$._v$4);
+            return _p$;
+          }, {
+            _v$3: undefined,
+            _v$4: undefined
+          });
 
           return _el$12;
         })()
@@ -4794,18 +4836,18 @@ var Lado = (function () {
             _el$15 = _el$14.firstChild;
 
       createRenderEffect(_p$ => {
-        const _v$3 = props.klass,
-              _v$4 = props.style,
-              _v$5 = tie_path(props.x2);
+        const _v$5 = props.klass,
+              _v$6 = props.style,
+              _v$7 = tie_path(props.x2);
 
-        _v$3 !== _p$._v$3 && className(_el$13, _p$._v$3 = _v$3);
-        _p$._v$4 = style(_el$13, _v$4, _p$._v$4);
-        _v$5 !== _p$._v$5 && setAttribute(_el$15, "d", _p$._v$5 = _v$5);
+        _v$5 !== _p$._v$5 && className(_el$13, _p$._v$5 = _v$5);
+        _p$._v$6 = style(_el$13, _v$6, _p$._v$6);
+        _v$7 !== _p$._v$7 && setAttribute(_el$15, "d", _p$._v$7 = _v$7);
         return _p$;
       }, {
-        _v$3: undefined,
-        _v$4: undefined,
-        _v$5: undefined
+        _v$5: undefined,
+        _v$6: undefined,
+        _v$7: undefined
       });
 
       return _el$13;
@@ -4820,15 +4862,15 @@ var Lado = (function () {
             _el$18 = _el$17.firstChild;
 
       createRenderEffect(_p$ => {
-        const _v$6 = props.style,
-              _v$7 = beam_path(100, props.y2);
+        const _v$8 = props.style,
+              _v$9 = beam_path(100, props.y2);
 
-        _p$._v$6 = style(_el$16, _v$6, _p$._v$6);
-        _v$7 !== _p$._v$7 && setAttribute(_el$18, "d", _p$._v$7 = _v$7);
+        _p$._v$8 = style(_el$16, _v$8, _p$._v$8);
+        _v$9 !== _p$._v$9 && setAttribute(_el$18, "d", _p$._v$9 = _v$9);
         return _p$;
       }, {
-        _v$6: undefined,
-        _v$7: undefined
+        _v$8: undefined,
+        _v$9: undefined
       });
 
       return _el$16;
