@@ -35,6 +35,44 @@ const KeyExercises = props => {
   return (<>
    
     <h2> Major Key Exercise </h2>
+    <div class='key-controls'>
+    <group class='radio'>
+        <div>
+        <input id="time_min" name="time" type='radio' checked={true}/>
+        <label for="time_min">1 Min.</label>
+        </div>
+        <div>
+        <input id="time_no" name="time" type='radio'/>
+        <label for="time_no">No time</label>
+        </div>
+      </group>
+      <group class='radio'>
+        <div>
+        <input id="order_random" name="order" type='radio' checked={true}/>
+        <label for="order_random"> Random </label>
+        </div>
+        <div>
+        <input id="order_sorted" name="order" type='radio'/>
+        <label for="order_sorted"> Sorted </label>
+        </div>
+      </group>
+      <group class='radio'>
+        <div>
+        <input id="nb_all" name="nb" type='radio' checked={true}/>
+        <label for="nb_all"> All </label>
+        </div>
+        <div>
+        <input id="nb_sharps" name="nb" type='radio'/>
+        <label for="nb_sharps">Sharps</label>
+        </div>
+        <div>
+        <input id="nb_flats" name="nb" type='radio'/>
+        <label for="nb_flats">Flats</label>
+        </div>
+      </group>
+
+      <span class='icon'> Start </span>
+    </div>
     <div class='key-exercise'>
       <div> <CMajorExercise/> </div>
     </div>

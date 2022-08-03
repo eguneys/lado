@@ -6,7 +6,10 @@
 }
 
 span.icon {
-  font-size: 0.5em;
+  display: flex;
+  flex-flow: column;
+  justify-content: center;
+  /*font-size: 0.6em;*/
   background: black;
   color: white;
   padding: 0.2em;
@@ -31,6 +34,7 @@ solsido {
   /*font-size: calc((100vw - 100%) / ((13 + 0.5) * 2));*/
   display: flex;
   flex-flow: column;
+  gap: 0.2em;
 }
 
 .key-signatures > div {
@@ -52,6 +56,10 @@ solsido {
   display: flex;
   align-items: center;
   gap: 0.2em;
+}
+
+.header > label {
+  padding: 0.2em;
 }
 
 .cmajor .header .controls {
@@ -94,4 +102,38 @@ bravura bra.green {
 
 bravura bra.red {
   color: red;
+}
+
+
+.key-controls {
+  gap: 0.2em;
+}
+
+group.radio {
+  position: relative;
+  display: flex;
+  flex-flow: row wrap;
+}
+
+.radio input {
+  position: absolute;
+  left: -99999px;
+}
+
+.radio div {
+  flex: 1 1 0;
+}
+
+.radio label {
+  white-space: nowrap;
+  display: flex;
+  justify-content: center;
+  background: gray;
+  padding: 0.2em;
+  box-shadow: inset 0px 1px 0px black,
+  inset 0px -1px 0px black;
+}
+
+.radio input:checked+label {
+  background: orange;
 }
