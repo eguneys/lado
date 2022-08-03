@@ -25,11 +25,21 @@ export const App = solsido => props => {
 
   return (<>
       <solsido ref={_ => setTimeout(() => solsido.ref.$ref = _)}>
+        <KeyExercises/>
         <KeySignatures majors={solsido._majors} />
       </solsido>
      </>)
 }
 
+const KeyExercises = props => {
+  return (<>
+   
+    <h2> Major Key Exercise </h2>
+    <div class='key-exercise'>
+      <div> <CMajorExercise/> </div>
+    </div>
+      </>)
+}
 
 const KeySignatures = props => {
 
@@ -45,6 +55,41 @@ const KeySignatures = props => {
      }</For>
      </div>
   </>)
+}
+
+const _VStaff = props => {
+  
+  let $ref
+
+  onMount(() => {
+    let api = VStaff($ref)
+    createEffect(() => {
+      api.bras = props.bras
+    })
+
+    createEffect(() => {
+      api.xwi = props.xwi || ''
+    })
+
+    createEffect(() => {
+        api.playback = props.playback 
+     })
+    })
+
+  return (<div ref={$ref}></div>)
+}
+
+const CMajorExercise = props => {
+
+  return (<div class="cmajor-exercise">
+
+    <div class="header">
+    </div>
+
+    <div class={['major-staff'].join(' ')}>
+     <_VStaff/>
+    </div>
+  </div>)
 }
 
 const you_titles = {

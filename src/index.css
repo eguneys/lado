@@ -28,7 +28,7 @@ solsido {
 
 .key-signatures {
   /* https://stackoverflow.com/questions/33606565/is-it-possible-to-calculate-the-viewport-width-vw-without-scrollbar */
-  font-size: calc((100vw - 100%) / ((13 + 0.5) * 2));
+  /*font-size: calc((100vw - 100%) / ((13 + 0.5) * 2));*/
   display: flex;
   flex-flow: column;
 }
@@ -37,13 +37,15 @@ solsido {
   flex: 1;
   display: flex;
   flex-flow: row;
+  justify-content: space-around;
   /* https://stackoverflow.com/questions/33454533/cant-scroll-to-top-of-flex-item-that-is-overflowing-container */
   gap: 0.5em;
-  margin: auto;
 }
 
+/* https://stackoverflow.com/questions/73224778/how-do-i-make-a-single-column-on-first-row-and-two-columns-on-second-row-with-eq/73225524# */
 .cmajor {
   display: inline-block;
+  flex: 0.48;
 }
 
 .cmajor .header {
@@ -57,9 +59,9 @@ solsido {
   gap: 0.2em;
 }
 
-.cmajor .major-staff {
+.cmajor .major-staff,
+.cmajor-exercise .major-staff {
   position: relative;
-  min-width: 13em;
   aspect-ratio: 13/4;
 }
 
