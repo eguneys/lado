@@ -79,8 +79,8 @@ const CMajor = props => {
       <label>{<Tonic tonic={props.major.majorKey.tonic}/>} <span class='major-type'>{props.major.majorKey.type}</span> </label>
       <div class='controls'>
         <Show when={read(_show_controls)}>
-        <Icon onClick={_ => props.solsido.major_playback.set_play(props.major)} title={props.major.play}>{props.major.play}</Icon>
-        <Icon onClick={_ => props.solsido.major_you.set_play(props.major)} title={you_titles[props.major.you_mode]}>{props.major.you_mode}</Icon>
+        <Icon onClick={_ => props.major.click_play()} title={props.major.play_mode}>{props.major.play_mode}</Icon>
+        <Icon onClick={_ => props.major.click_you()} title={you_titles[props.major.you_mode]}>{props.major.you_mode}</Icon>
         </Show>
       </div>
       </div>

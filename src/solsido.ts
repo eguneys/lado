@@ -87,10 +87,6 @@ const make_you = (solsido: Solsido) => {
     },
     stop_major(major: Major) {
       owrite(_major, _ => _ === major ? undefined : _)
-    },
-    set_play(major: Major) {
-      owrite(solsido._user_click, true)
-      solsido._majors.majors.forEach(_ => _.set_play_you(_ === major))
     }
   }
 
@@ -150,10 +146,6 @@ const make_playback = (solsido: Solsido) => {
     },
     stop_major(major: Major) {
       owrite(_major, _ => _ === major ? undefined : _)
-    },
-    set_play(major: Major) {
-      owrite(solsido._user_click, true)
-      solsido._majors.majors.forEach(_ => _.set_play(_ === major))
     }
   }
 }
@@ -190,6 +182,8 @@ const make_major = (solsido: Solsido, key: Key) => {
   let gap_note = 1.3 - (i_wnote / 8) * 0.3
   let _bras = ['gclef@0.2,0', ...__ks, ...__ns.map((_, i) => `whole_note@${i * gap_note + i_wnote * 0.3 + 1.5},${note_bra_y(_)*0.125}`)]
 
+  let _notes = __ns.map(n => _majorKey.scale.find(_ => _[0] === n[0]) + n[1])
+
   let _playback = createSignal(false)
   let _you = createSignal(false)
 
@@ -214,6 +208,9 @@ const make_major = (solsido: Solsido, key: Key) => {
     get bras() {
       return [..._bras]
     },
+    get notes() {
+      return _notes
+    },
     set playing_note(note: Note) {
     },
     xw_at(x: number) {
@@ -233,17 +230,25 @@ const make_major = (solsido: Solsido, key: Key) => {
 
       return [parseFloat(xx), parseFloat(x2)-parseFloat(x1)]
     },
-    get play() {
+    get play_mode() {
       return read(_playback) ? 'stop' :'play'
-    },
-    set_play(v: boolean) {
-      owrite(_playback, _ => v ? !_ : false)
     },
     get you_mode() {
       return read(_you) ? 'stop' : 'you'
     },
-    set_play_you(v: boolean) {
+    set_play(v: boolean) {
+      owrite(_playback, _ => v ? !_ : false)
+    },
+    set_you(v: boolean) {
       owrite(_you, _ => v ? !_ : false)
+    },
+    click_play() {
+      owrite(solsido._user_click, true)
+      solsido._majors.majors.forEach(_ => _.set_play(_ === this))
+    },
+    click_you() {
+      owrite(solsido._user_click, true)
+      solsido._majors.majors.forEach(_ => _.set_you(_ === this))
     },
     get you() {
       return read(_you)
@@ -294,6 +299,9 @@ const make_majors = (solsido: Solsido) => {
   let _c = make_major(solsido, perfect_c_sharps[0])
 
   return {
+    get majors() {
+      return [..._perfect_c_sharps, ..._perfect_c_flats, _c]
+    },
     get c_major() {
       return _c
     },
