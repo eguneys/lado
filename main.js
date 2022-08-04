@@ -3195,7 +3195,7 @@ var Lado = (function () {
     let m_time = createMemo$1(() => {
       let _ = read$1(_time);
 
-      let res = time === 0 ? Math.max(0, ticks.seconds * 60 - _) : _;
+      let res = time === 0 ? Math.max(0, ticks.seconds * 120 - _) : _;
       return res / 1000;
     });
     onCleanup$1(() => {
@@ -5325,11 +5325,11 @@ var Lado = (function () {
         _tmpl$2 = /*#__PURE__*/template$1(`<h2> Major Key Exercise </h2>`),
         _tmpl$3 = /*#__PURE__*/template$1(`<div class="key-exercise"><div> <!> </div></div>`),
         _tmpl$4 = /*#__PURE__*/template$1(`<span class="action icon">Start</span>`),
-        _tmpl$5 = /*#__PURE__*/template$1(`<div class="key-explanation"><p>You can memorize major key signatures with this exercise.</p><p>Play the given key signature using your MIDI keyboard.</p><p>You have 1 minute to play as much as you can.</p></div>`),
+        _tmpl$5 = /*#__PURE__*/template$1(`<div class="key-explanation"><p>You can memorize major key signatures with this exercise.</p><p>Play the given key signature using your MIDI keyboard.</p><p>You have 2 minutes to play as much as you can.</p></div>`),
         _tmpl$6 = /*#__PURE__*/template$1(`<div class="key-current"><span class="icon small">Restart</span><div class="box flex"><h4></h4></div><div class="scores"><div class="box status"><h4>High Score</h4><span></span></div></div></div>`),
         _tmpl$7 = /*#__PURE__*/template$1(`<h3> <span class="major-type"></span> </h3>`),
         _tmpl$8 = /*#__PURE__*/template$1(`<div class="key-current"><span class="icon small">Restart</span><div class="box flex"><h4></h4></div><div class="scores"><div class="box status"><h4>Score</h4><span></span></div><div class="box status"><h4> Time </h4><span></span></div></div><div class="major status"></div></div>`),
-        _tmpl$9 = /*#__PURE__*/template$1(`<div class="key-controls"><group class="radio"><div><input id="time_min" name="time" type="radio"><label for="time_min">1 Minute</label></div><div><input id="time_no" name="time" type="radio"><label for="time_no">No time</label></div></group><group class="radio"><div><input id="order_random" name="order" type="radio"><label for="order_random">Random</label></div><div><input id="order_sorted" name="order" type="radio"><label for="order_sorted">Sorted</label></div></group><group class="radio"><div><input id="nb_all" name="nb" type="radio"><label for="nb_all">All</label></div><div><input id="nb_sharps" name="nb" type="radio"><label for="nb_sharps">Sharps</label></div><div><input id="nb_flats" name="nb" type="radio"><label for="nb_flats">Flats</label></div></group><div class="switch"><div><input id="use_hints" name="use_hints" type="checkbox"><label for="use_hints">Show Hints</label></div></div></div>`),
+        _tmpl$9 = /*#__PURE__*/template$1(`<div class="key-controls"><group class="radio"><div><input id="time_min" name="time" type="radio"><label for="time_min">2 Minutes</label></div><div><input id="time_no" name="time" type="radio"><label for="time_no">No time</label></div></group><group class="radio"><div><input id="order_random" name="order" type="radio"><label for="order_random">Random</label></div><div><input id="order_sorted" name="order" type="radio"><label for="order_sorted">Sorted</label></div></group><group class="radio"><div><input id="nb_all" name="nb" type="radio"><label for="nb_all">All</label></div><div><input id="nb_sharps" name="nb" type="radio"><label for="nb_sharps">Sharps</label></div><div><input id="nb_flats" name="nb" type="radio"><label for="nb_flats">Flats</label></div></group><div class="switch"><div><input id="use_hints" name="use_hints" type="checkbox"><label for="use_hints">Show Hints</label></div></div></div>`),
         _tmpl$10 = /*#__PURE__*/template$1(`<h2> Major Key Signatures </h2>`),
         _tmpl$11 = /*#__PURE__*/template$1(`<div class="key-signatures"><div> <!> </div></div>`),
         _tmpl$12 = /*#__PURE__*/template$1(`<div></div>`),
