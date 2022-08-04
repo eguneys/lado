@@ -3141,7 +3141,7 @@ var Lado = (function () {
 
     return key => {
       let i = key === undefined ? 0 : _res.indexOf(key) + 1;
-      return _res[i];
+      return _res[i % _res.length];
     };
   };
 
