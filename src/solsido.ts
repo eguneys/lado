@@ -268,6 +268,7 @@ const make_current = (solsido: Solsido, opts: ExerciseOptions) => {
 
 const make_exercises = (solsido: Solsido) => {
 
+  let _explanations = createSignal(true)
   let _time = createLocal('time', 0),
     _order = createLocal('order', 0),
     _nb = createLocal('nb', 0),
@@ -294,6 +295,9 @@ const make_exercises = (solsido: Solsido) => {
   let m_dton = createMemo(() => [read(_time), read(_order), read(_nb), read(_hints)])
 
   return {
+    get explanations() {
+      return read(_explanations)
+    },
     get dton() {
       return m_dton()
     },
@@ -302,6 +306,7 @@ const make_exercises = (solsido: Solsido) => {
     },
     start(opts: ExerciseOptions) {
 
+      owrite(_explanations, false)
       owrite(_time, opts[0])
       owrite(_order, opts[1])
       owrite(_nb, opts[2])

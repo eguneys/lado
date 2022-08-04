@@ -3,6 +3,23 @@ import VStaff from 'vstaff'
 import g from './music/glyphs'
 import { read, write, owrite } from './play'
 
+let $time_min, $time_no, $order_random, $order_sorted, $nb_all, $nb_sharps, $nb_flats
+
+let $use_hints
+
+const checkeds = () => {
+  let _$times = [$time_min, $time_no]
+    let _$orders = [$order_random, $order_sorted]
+    let _$nbs = [$nb_all, $nb_sharps, $nb_flats]
+
+    return [
+    ...[_$times, _$orders, _$nbs].map(_ => _.findIndex(_ => _.checked)),
+    $use_hints.checked ? 1 : 0
+    ]
+}
+
+
+
 function format_time(n: number) {
   var sec_num = parseInt(n, 10);
   var minutes = Math.floor(sec_num / 60);
@@ -44,9 +61,17 @@ const KeyExercises = props => {
   return (<>
    
     <h2> Major Key Exercise </h2>
+    <Show when={console.log(props.exercises.explanations)||props.exercises.explanations}>
+
+    <KeyExerciseExplanation/>
+    </Show>
+
     <Show when={props.exercises.current}
     fallback={ 
+    <>
+      <span onClick={() => props.exercises.start(checkeds())} class='action icon'>Start</span>
       <KeyExerciseControls exercises={props.exercises}/>
+    </>
     }>{ current =>
        <Show when={current.result!== undefined} fallback={ <KeyExerciseCurrent current={current}/> }>
          <KeyExerciseResults current={current}/>
@@ -56,6 +81,16 @@ const KeyExercises = props => {
       <div> <CMajorExercise current={props.exercises.current}/> </div>
     </div>
       </>)
+}
+
+const KeyExerciseExplanation = props => {
+  return (<>
+     <div class='key-explanation'>
+       <p>You can memorize major key signatures with this exercise.</p>
+       <p>Play the given key signature using your MIDI keyboard.</p>
+       <p>You have 1 minute to play as much as you can.</p>
+     </div>
+   </>)
 }
 
 const KeyExerciseResults = props => {
@@ -104,22 +139,6 @@ const KeyExerciseCurrent = props => {
 
 const KeyExerciseControls = props => {
 
-  let $time_min, $time_no, $order_random, $order_sorted, $nb_all, $nb_sharps, $nb_flats
-
-  let $use_hints
-
-  const checkeds = () => {
-    let _$times = [$time_min, $time_no]
-    let _$orders = [$order_random, $order_sorted]
-    let _$nbs = [$nb_all, $nb_sharps, $nb_flats]
-
-    return [
-    ...[_$times, _$orders, _$nbs].map(_ => _.findIndex(_ => _.checked)),
-    $use_hints.checked ? 1 : 0
-    ]
-  }
-
-
   let e = props.exercises
 
   return (<div class='key-controls'>
@@ -163,8 +182,6 @@ const KeyExerciseControls = props => {
         <label for="use_hints">Show Hints</label>
        </div>
       </div>
-
-      <span onClick={() => props.exercises.start(checkeds())} class='icon'>Start</span>
     </div>)
 }
 

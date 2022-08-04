@@ -1,9 +1,20 @@
+p,
+h3,
+h4{
+  margin: 0;
+}
+
+p {
+  margin-bottom: 1em;
+}
+
 @font-face {
   font-family: 'BravuraText';
   font-display: block;
   src: url(assets/BravuraText.woff2) format("woff2"),
   url(assets/BravuraText.woff) format("woff");
 }
+
 
 span.icon {
   display: flex;
@@ -21,6 +32,10 @@ span.icon {
 
 span.icon:hover {
   background: #222;
+}
+
+span.action.icon {
+  font-size: 2em;
 }
 
 
@@ -114,6 +129,7 @@ bravura bra.red {
   display: inline-flex;
   flex-flow: column;
   gap: 0.1em;
+  margin: 0.5em 0;
 }
 
 group.radio {
@@ -168,11 +184,6 @@ group.radio {
   border-radius: 0.05em;
   padding: 0.3em;
   background: #222;
-}
-
-h3,
-h4 {
-  margin: 0;
 }
 
 .major.status {
