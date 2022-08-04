@@ -72,7 +72,7 @@ function shuffleArr (array){
 
 const make_next_key = (order: Order, nb: Nb) => {
 
-  let perfects = [[...perfect_c_sharps, ...perfect_c_flats],
+  let perfects = [[...perfect_c_sharps, ...perfect_c_flats.slice(1, 8)],
     perfect_c_sharps,
     perfect_c_flats]
 

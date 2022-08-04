@@ -89,6 +89,18 @@ const KeyExerciseExplanation = props => {
        <p>You can memorize major key signatures with this exercise.</p>
        <p>Play the given key signature using your MIDI keyboard.</p>
        <p>You have 2 minutes to play as much as you can.</p>
+ 
+       <p> Also, play and practice individual scales at where they are listed below.  </p>
+
+       <p>Try these extra challenges:
+       <ul>
+        <li>Spot the patterns that emerge from sharp side, and flat side.</li>
+       <li>Play with five fingers with the fingering techniques.</li>
+       <li>Say the notes as you play them.</li>
+       <li>Play without looking at the piano.</li>
+       </ul>
+       </p>
+
      </div>
    </>)
 }
