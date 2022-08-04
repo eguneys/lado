@@ -94,7 +94,9 @@ const KeyExerciseCurrent = props => {
     </div>
     </div>
     <div class='major status'>
+      <Show when={props.current.show_hints}>
       <h3>{<Tonic tonic={props.current.majorKey.tonic}/>} <span class='major-type'>{props.current.majorKey.type}</span> </h3>
+      </Show>
     </div>
   </div>
     </>)
@@ -104,13 +106,19 @@ const KeyExerciseControls = props => {
 
   let $time_min, $time_no, $order_random, $order_sorted, $nb_all, $nb_sharps, $nb_flats
 
+  let $use_hints
+
   const checkeds = () => {
     let _$times = [$time_min, $time_no]
     let _$orders = [$order_random, $order_sorted]
     let _$nbs = [$nb_all, $nb_sharps, $nb_flats]
 
-    return [_$times, _$orders, _$nbs].map(_ => _.findIndex(_ => _.checked))
+    return [
+    ...[_$times, _$orders, _$nbs].map(_ => _.findIndex(_ => _.checked)),
+    $use_hints.checked ? 1 : 0
+    ]
   }
+
 
   let e = props.exercises
 
@@ -149,6 +157,12 @@ const KeyExerciseControls = props => {
         <label for="nb_flats">Flats</label>
         </div>
       </group>
+      <div class='switch'>
+       <div>
+        <input ref={$use_hints} id="use_hints" name="use_hints" type='checkbox' checked={e.dton[3] === 1}/>
+        <label for="use_hints">Show Hints</label>
+       </div>
+      </div>
 
       <span onClick={() => props.exercises.start(checkeds())} class='icon'>Start</span>
     </div>)

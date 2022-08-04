@@ -122,7 +122,8 @@ group.radio {
   flex-flow: row wrap;
 }
 
-.radio input {
+.radio input,
+.switch input {
   position: absolute;
   left: -99999px;
 }
@@ -132,6 +133,8 @@ group.radio {
 }
 
 .radio label {
+  user-select: none;
+  cursor: pointer;
   white-space: nowrap;
   display: flex;
   justify-content: center;
@@ -203,3 +206,26 @@ h4 {
 span.red {
   color: red;
 }
+
+.switch {
+  display: flex;
+  justify-content: flex-end;
+}
+
+.switch label {
+  user-select: none;
+  cursor: pointer;
+  display: inline-block;
+  padding: 0.2em;
+  border-radius: 2em;
+  background: green;
+}
+
+.switch input:not(:checked)+label {
+  background: hsla(0, 50%, 20%, 0.5);
+}
+
+.switch input:not(:checked)+label:hover {
+  background: hsla(0, 50%, 30%, 0.8);
+}
+

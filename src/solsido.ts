@@ -110,7 +110,9 @@ const getHighLocal = (() => {
 })()
 
 const make_current = (solsido: Solsido, opts: ExerciseOptions) => {
-  let [time, order, nb] = opts
+  let [time, order, nb, hints] = opts
+
+  let _show_hints = hints === 1
 
   let _high = getHighLocal(opts)
 
@@ -145,6 +147,7 @@ const make_current = (solsido: Solsido, opts: ExerciseOptions) => {
     return res / 1000
   })
 
+
   onCleanup(() => {
     cancel()
   })
@@ -171,7 +174,10 @@ const make_current = (solsido: Solsido, opts: ExerciseOptions) => {
 
   let m_notes = createMemo(() => m__ns().map(n => m_majorKey().scale.find(_ => _[0] === n[0]) + n[1]))
 
-  let m_bras = createMemo(() => ['gclef@0.2,0', ...m__ks(), ...m__ns().map((_, i) => `whole_note,ghost@${i * m_gap_note() + m_i_wnote() * 0.3 + 1.5},${note_bra_y(_)*0.125}`)])
+  let m_bras = createMemo(() => ['gclef@0.2,0', ...m__ks(), 
+                          ...(!_show_hints ? [] :
+                          (m__ns().map((_, i) => `whole_note,ghost@${i * m_gap_note() + m_i_wnote() * 0.3 + 1.5},${note_bra_y(_)*0.125}`)))
+  ])
 
   let _correct_notes = createSignal([], { equals: false })
 
@@ -190,6 +196,9 @@ const make_current = (solsido: Solsido, opts: ExerciseOptions) => {
     },
     get time() {
       return m_time()
+    },
+    get show_hints() {
+      return _show_hints
     },
     set playing_note(note: Note | undefined) {
       owrite(_playing_note, note)
@@ -261,7 +270,8 @@ const make_exercises = (solsido: Solsido) => {
 
   let _time = createLocal('time', 0),
     _order = createLocal('order', 0),
-    _nb = createLocal('nb', 0)
+    _nb = createLocal('nb', 0),
+    _hints = createLocal('hints', 0)
 
   let _current = createSignal()
   let m_current = createMemo(() => {
@@ -281,7 +291,7 @@ const make_exercises = (solsido: Solsido) => {
     }
   }))
 
-  let m_dton = createMemo(() => [read(_time), read(_order), read(_nb)])
+  let m_dton = createMemo(() => [read(_time), read(_order), read(_nb), read(_hints)])
 
   return {
     get dton() {
@@ -295,6 +305,7 @@ const make_exercises = (solsido: Solsido) => {
       owrite(_time, opts[0])
       owrite(_order, opts[1])
       owrite(_nb, opts[2])
+      owrite(_hints, opts[3])
       owrite(solsido._user_click, true)
       owrite(_current, opts)
     },
