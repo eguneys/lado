@@ -58,7 +58,7 @@ solsido {
   gap: 0.2em;
 }
 
-.header > label {
+.cmajor .header > h3 {
   padding: 0.2em;
 }
 
@@ -73,7 +73,8 @@ solsido {
   aspect-ratio: 13/4;
 }
 
-.cmajor .major-type {
+.cmajor .major-type,
+.major.status .major-type {
   text-transform: capitalize;
 }
 
@@ -92,6 +93,10 @@ span.bra {
   font-size: 1.1em;
 }
 
+bravura bra.ghost {
+  opacity: 0.4;
+}
+
 bravura bra.live {
   color: orange;
 }
@@ -106,7 +111,9 @@ bravura bra.red {
 
 
 .key-controls {
-  gap: 0.2em;
+  display: inline-flex;
+  flex-flow: column;
+  gap: 0.1em;
 }
 
 group.radio {
@@ -136,4 +143,63 @@ group.radio {
 
 .radio input:checked+label {
   background: orange;
+}
+
+.key-current {
+  display: flex;
+  flex-flow: column;
+  align-items: stretch;
+  gap: 0.2em;
+}
+
+.key-current .icon.small {
+  display: inline-block;
+  align-self: flex-end;
+}
+
+.key-exercise {
+  margin-top: 0.2em;
+}
+
+.box {
+  border-radius: 0.05em;
+  padding: 0.3em;
+  background: #222;
+}
+
+h3,
+h4 {
+  margin: 0;
+}
+
+.major.status {
+  display: flex;
+  justify-content: center;
+}
+
+.major.status h3 {
+  text-shadow: 0 2px 2px #444;
+}
+
+.key-current .scores {
+  display: flex;
+  justify-content: center;
+  gap: 1em;
+}
+
+.box.flex {
+  display: flex;
+  justify-content: center;
+}
+
+.box.status {
+  flex: 0.4 1 0;
+  display: flex;
+  flex-flow: column;
+  align-items: center;
+}
+
+
+span.red {
+  color: red;
 }

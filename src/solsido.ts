@@ -1,3 +1,4 @@
+import { ticks } from './shared'
 import { createResource, onCleanup, on, createEffect, createSignal, createMemo, mapArray } from 'solid-js'
 import { make_ref } from './make_sticky'
 import { read, write, owrite } from './play'
@@ -26,6 +27,10 @@ const getPlayerController = async (input: boolean) => {
 
 export default class Solsido {
 
+  onClick() {
+    //owrite(this._user_click, true)
+  }
+
   onScroll() {
     this.ref.$clear_bounds()
   }
@@ -42,11 +47,180 @@ export default class Solsido {
 
     this.ref = make_ref()
 
+    this._exercises = make_exercises(this)
+
     this._majors = make_majors(this)
 
     this.major_playback = make_playback(this)
 
     this.major_you = make_you(this)
+  }
+}
+
+let all_perfects = [...perfect_c_sharps, ...perfect_c_flats]
+
+const next_key = (order: Order, nb: Nb, key: Key) => {
+  let _res = all_perfects
+  let i = key === undefined ? 0 : _res.indexOf(key) + 1
+  return _res[i]
+}
+
+const make_current = (solsido: Solsido, opts: ExerciseOptions) => {
+  let [time, order, nb] = opts
+
+  let h_time = ['Challenge', 'Free']
+  let h_order = ['', 'Sorted']
+  let h_nb = ['', 'Sharps', 'Flats']
+
+  let _score = createSignal(0)
+  let _red_time = createSignal()
+
+  let _time = createSignal(0)
+  let cancel = loop((dt: number, dt0: number) => {
+    owrite(_time, _ => _ += dt)
+  })
+
+  let m_red_score = createMemo(() => {
+    let red_time = read(_red_time)
+
+    if (red_time) {
+      return read(_time) - red_time < ticks.half
+    }
+  })
+
+
+  let m_time = createMemo(() => {
+    let _ = read(_time)
+    let res =  time === 0 ? ticks.seconds * 60 - _ : _
+    return res / 1000
+  })
+
+  onCleanup(() => {
+    cancel()
+  })
+
+  let m_klass = createMemo(() => [ 
+    'you'
+  ])
+
+  let m_score_klass = createMemo(() => [
+    m_red_score() ? 'red' : ''
+  ])
+
+  let _playing_note = createSignal()
+
+  let _key = createSignal(next_key(order, nb))
+
+  let m_majorKey = createMemo(() => majorKey(read(_key)))
+
+  let m__ns = createMemo(() => scale_in_notes(m_majorKey().scale))
+  let m__ks = createMemo(() => key_signatures(m_majorKey().keySignature))
+
+  let m_i_wnote = createMemo(() => m__ks().length)
+  let m_gap_note = createMemo(() => 1.3 - (m_i_wnote() / 8) * 0.3)
+
+  let m_notes = createMemo(() => m__ns().map(n => m_majorKey().scale.find(_ => _[0] === n[0]) + n[1]))
+
+  let m_bras = createMemo(() => ['gclef@0.2,0', ...m__ks(), ...m__ns().map((_, i) => `whole_note,ghost@${i * m_gap_note() + m_i_wnote() * 0.3 + 1.5},${note_bra_y(_)*0.125}`)])
+
+  let _correct_notes = createSignal([], { equals: false })
+
+
+  let m_playing_bras = createMemo(() => read(_correct_notes).map((no_flat_note, i) => `whole_note,live@${i * m_gap_note() + m_i_wnote() * 0.3 + 1.5},${note_bra_y(no_flat_note)*0.125}`))
+
+  createEffect(on(_correct_notes[0], v => {
+    if (v.length === 8) {
+      let _n = next_key(order, nb, read(_key))
+
+      if (_n) {
+
+        owrite(_score, _ => _ + 1)
+        owrite(_key, _n)
+        owrite(_correct_notes, [])
+      }
+
+    }
+  }))
+
+  createEffect(on(_playing_note[0], (note, p) => {
+    if (!p && !!note) {
+      let _ = m_notes()[read(_correct_notes).length]
+      let correct = (_ === note || enharmonic(_) === note) && _
+
+      if (correct) {
+        let _note = correct
+        let no_flat_note = _note[0] + _note[_note.length - 1]
+        write(_correct_notes, _ => _.push(no_flat_note))
+      } else {
+        owrite(_red_time, read(_time))
+        owrite(_correct_notes, [])
+      }
+    }
+  }))
+
+  return {
+    get score() {
+      return read(_score)
+    },
+    get score_klass() {
+      return m_score_klass()
+    },
+    get time() {
+      return m_time()
+    },
+    set playing_note(note: Note | undefined) {
+      owrite(_playing_note, note)
+    },
+    get bras() {
+      return [...m_bras(), ...m_playing_bras()]
+    },
+    get klass() {
+      return m_klass()
+    },
+    get majorKey() {
+      return m_majorKey()
+    },
+    get header() {
+      return [h_time[time], h_order[order], h_nb[nb]].join(' ')
+    },
+    cancel() {
+      solsido._exercises.cancel()
+    }
+  }
+}
+
+const make_exercises = (solsido: Solsido) => {
+
+  let _current = createSignal()
+  let m_current = createMemo(() => {
+    let current = read(_current)
+    if (current) {
+      return make_current(solsido, current)
+    }
+  })
+
+  createEffect(on(m_current, (v, p) => {
+    if (v) {
+      solsido.major_you.play_major(v)
+    } else {
+      if (!!p) {
+        solsido.major_you.stop_major(p)
+      }
+    }
+  }))
+
+
+  return {
+    get current() {
+      return m_current()
+    },
+    start(opts: ExerciseOptions) {
+      owrite(solsido._user_click, true)
+      owrite(_current, opts)
+    },
+    cancel() {
+      owrite(_current, undefined)
+    }
   }
 }
 
@@ -61,7 +235,6 @@ const make_you = (solsido: Solsido) => {
 
   createEffect(on(_major[0], v => {
     if (v) {
-
       let midi = make_midi({
         just_ons(ons: Array<Note>) {
           let { player } = solsido
