@@ -57,16 +57,35 @@ export default class Solsido {
   }
 }
 
-let all_perfects = [...perfect_c_sharps, ...perfect_c_flats]
+function shuffleArr (array){
+  for (var i = array.length - 1; i > 0; i--) {
+    var rand = Math.floor(Math.random() * (i + 1));
+    [array[i], array[rand]] = [array[rand], array[i]]
+  }
+}
 
-const next_key = (order: Order, nb: Nb, key: Key) => {
-  let _res = all_perfects
-  let i = key === undefined ? 0 : _res.indexOf(key) + 1
-  return _res[i]
+const make_next_key = (order: Order, nb: Nb) => {
+
+  let perfects = [[...perfect_c_sharps, ...perfect_c_flats],
+    perfect_c_sharps,
+    perfect_c_flats]
+
+    let _res = perfects[nb].slice(0)
+
+    if (order === 0) {
+      shuffleArr(_res)
+    }
+
+  return key => {
+    let i = key === undefined ? 0 : _res.indexOf(key) + 1
+    return _res[i]
+  }
 }
 
 const make_current = (solsido: Solsido, opts: ExerciseOptions) => {
   let [time, order, nb] = opts
+
+  let next_key = make_next_key(order, nb)
 
   let h_time = ['Challenge', 'Free']
   let h_order = ['', 'Sorted']
@@ -109,7 +128,7 @@ const make_current = (solsido: Solsido, opts: ExerciseOptions) => {
 
   let _playing_note = createSignal()
 
-  let _key = createSignal(next_key(order, nb))
+  let _key = createSignal(next_key())
 
   let m_majorKey = createMemo(() => majorKey(read(_key)))
 
@@ -130,7 +149,7 @@ const make_current = (solsido: Solsido, opts: ExerciseOptions) => {
 
   createEffect(on(_correct_notes[0], v => {
     if (v.length === 8) {
-      let _n = next_key(order, nb, read(_key))
+      let _n = next_key(read(_key))
 
       if (_n) {
 
