@@ -3131,7 +3131,7 @@ var Lado = (function () {
   }
 
   const make_next_key = (order, nb) => {
-    let perfects = [[...perfect_c_sharps, ...perfect_c_flats], perfect_c_sharps, perfect_c_flats];
+    let perfects = [[...perfect_c_sharps, ...perfect_c_flats.slice(1, 8)], perfect_c_sharps, perfect_c_flats];
 
     let _res = perfects[nb].slice(0);
 
@@ -5325,7 +5325,7 @@ var Lado = (function () {
         _tmpl$2 = /*#__PURE__*/template$1(`<h2> Major Key Exercise </h2>`),
         _tmpl$3 = /*#__PURE__*/template$1(`<div class="key-exercise"><div> <!> </div></div>`),
         _tmpl$4 = /*#__PURE__*/template$1(`<span class="action icon">Start</span>`),
-        _tmpl$5 = /*#__PURE__*/template$1(`<div class="key-explanation"><p>You can memorize major key signatures with this exercise.</p><p>Play the given key signature using your MIDI keyboard.</p><p>You have 2 minutes to play as much as you can.</p></div>`),
+        _tmpl$5 = /*#__PURE__*/template$1(`<div class="key-explanation"><p>You can memorize major key signatures with this exercise.</p><p>Play the given key signature using your MIDI keyboard.</p><p>You have 2 minutes to play as much as you can.</p><p> Also, play and practice individual scales at where they are listed below. </p><p>Try these extra challenges:<ul><li>Spot the patterns that emerge from sharp side, and flat side.</li><li>Play with five fingers with the fingering techniques.</li><li>Say the notes as you play them.</li><li>Play without looking at the piano.</li></ul></p></div>`),
         _tmpl$6 = /*#__PURE__*/template$1(`<div class="key-current"><span class="icon small">Restart</span><div class="box flex"><h4></h4></div><div class="scores"><div class="box status"><h4>High Score</h4><span></span></div></div></div>`),
         _tmpl$7 = /*#__PURE__*/template$1(`<h3> <span class="major-type"></span> </h3>`),
         _tmpl$8 = /*#__PURE__*/template$1(`<div class="key-current"><span class="icon small">Restart</span><div class="box flex"><h4></h4></div><div class="scores"><div class="box status"><h4>Score</h4><span></span></div><div class="box status"><h4> Time </h4><span></span></div></div><div class="major status"></div></div>`),
