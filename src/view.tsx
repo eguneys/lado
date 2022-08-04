@@ -88,7 +88,7 @@ const KeyExerciseExplanation = props => {
      <div class='key-explanation'>
        <p>You can memorize major key signatures with this exercise.</p>
        <p>Play the given key signature using your MIDI keyboard.</p>
-       <p>You have 1 minute to play as much as you can.</p>
+       <p>You have 2 minutes to play as much as you can.</p>
      </div>
    </>)
 }
@@ -145,7 +145,7 @@ const KeyExerciseControls = props => {
     <group class='radio'>
         <div>
         <input ref={$time_min} id="time_min" name="time" type='radio' checked={e.dton[0] === 0}/>
-        <label for="time_min">1 Minute</label>
+        <label for="time_min">2 Minutes</label>
         </div>
         <div>
         <input ref={$time_no} id="time_no" name="time" type='radio' checked={e.dton[0] === 1}/>

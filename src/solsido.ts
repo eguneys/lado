@@ -143,7 +143,7 @@ const make_current = (solsido: Solsido, opts: ExerciseOptions) => {
 
   let m_time = createMemo(() => {
     let _ = read(_time)
-    let res =  time === 0 ? Math.max(0, ticks.seconds * 60 - _) : _
+    let res =  time === 0 ? Math.max(0, ticks.seconds * 120 - _) : _
     return res / 1000
   })
 
