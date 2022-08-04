@@ -48,7 +48,9 @@ const KeyExercises = props => {
     fallback={ 
       <KeyExerciseControls exercises={props.exercises}/>
     }>{ current =>
-       <KeyExerciseCurrent current={current}/>
+       <Show when={current.result!== undefined} fallback={ <KeyExerciseCurrent current={current}/> }>
+         <KeyExerciseResults current={current}/>
+       </Show>
     }</Show>
     <div class='key-exercise'>
       <div> <CMajorExercise current={props.exercises.current}/> </div>
@@ -59,17 +61,25 @@ const KeyExercises = props => {
 const KeyExerciseResults = props => {
   return (<>
     <div class='key-current'>
-    <span onClick={() => props.current.cancel()} class="icon small">Restart</span>
+      <span onClick={() => props.current.cancel()} class="icon small">Restart</span>
+      <div class='box flex'>
+        <h4>{props.current.header}</h4>
+      </div>
+      <div class='scores'>
+      <div class='box status'>
+        <h4>High Score</h4>
+        <span class={props.current.score_klass}>{props.current.result}</span>
+      </div>
 
+      </div>
     </div>
-
-      </>)
+    </>)
 }
 
 const KeyExerciseCurrent = props => {
   return (<>
   <div class='key-current'>
-    <span onClick={() => props.current.cancel()} class="icon small">Cancel</span>
+    <span onClick={() => props.current.cancel()} class="icon small">Restart</span>
     <div class='box flex'>
       <h4>{props.current.header}</h4>
     </div>
@@ -102,38 +112,40 @@ const KeyExerciseControls = props => {
     return [_$times, _$orders, _$nbs].map(_ => _.findIndex(_ => _.checked))
   }
 
+  let e = props.exercises
+
   return (<div class='key-controls'>
     <group class='radio'>
         <div>
-        <input ref={$time_min} id="time_min" name="time" type='radio' checked={true}/>
-        <label for="time_min">1 Min.</label>
+        <input ref={$time_min} id="time_min" name="time" type='radio' checked={e.dton[0] === 0}/>
+        <label for="time_min">1 Minute</label>
         </div>
         <div>
-        <input ref={$time_no} id="time_no" name="time" type='radio'/>
+        <input ref={$time_no} id="time_no" name="time" type='radio' checked={e.dton[0] === 1}/>
         <label for="time_no">No time</label>
         </div>
       </group>
       <group class='radio'>
         <div>
-        <input ref={$order_random} id="order_random" name="order" type='radio' checked={true}/>
-        <label for="order_random"> Random </label>
+        <input ref={$order_random} id="order_random" name="order" type='radio' checked={e.dton[1] === 0}/>
+        <label for="order_random">Random</label>
         </div>
         <div>
-        <input ref={$order_sorted} id="order_sorted" name="order" type='radio'/>
-        <label for="order_sorted"> Sorted </label>
+        <input ref={$order_sorted} id="order_sorted" name="order" type='radio' checked={e.dton[1] === 1}/>
+        <label for="order_sorted">Sorted</label>
         </div>
       </group>
       <group class='radio'>
         <div>
-        <input ref={$nb_all} id="nb_all" name="nb" type='radio' checked={true}/>
-        <label for="nb_all"> All </label>
+        <input ref={$nb_all} id="nb_all" name="nb" type='radio' checked={e.dton[2] === 0}/>
+        <label for="nb_all">All</label>
         </div>
         <div>
-        <input ref={$nb_sharps} id="nb_sharps" name="nb" type='radio'/>
+        <input ref={$nb_sharps} id="nb_sharps" name="nb" type='radio' checked={e.dton[2] === 1}/>
         <label for="nb_sharps">Sharps</label>
         </div>
         <div>
-        <input ref={$nb_flats} id="nb_flats" name="nb" type='radio'/>
+        <input ref={$nb_flats} id="nb_flats" name="nb" type='radio' checked={e.dton[2] === 2}/>
         <label for="nb_flats">Flats</label>
         </div>
       </group>

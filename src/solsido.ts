@@ -8,6 +8,12 @@ import { SamplesPlayer } from './audio'
 import { short_range_flat_notes, fuzzy_note } from './audio'
 import { majorKey, perfect_c_sharps, perfect_c_flats } from './audio'
 import { get_note, enharmonic } from './audio'
+import { createLocal } from './make_storage'
+
+const getHighscore = async (opts: ExerciseOptions) => {
+  let [time, order, nb] = opts
+
+}
 
 const getPlayerController = async (input: boolean) => {
   if (input) {
@@ -82,8 +88,33 @@ const make_next_key = (order: Order, nb: Nb) => {
   }
 }
 
+const getHighLocal = (() => {
+  const key = (order, nb) => [order, nb].join('_')
+
+  let _ = {}
+ 
+  let orders = [0, 1]
+  let nbs = [0, 1, 2]
+
+  orders.forEach(order => nbs.forEach(nb => {
+    let _key = key(order, nb)
+    _[_key] = createLocal(_key, 0)
+  }))
+
+  return opts => {
+    let [time, order, nb] = opts
+
+    return _[key(order, nb)]
+  }
+
+})()
+
 const make_current = (solsido: Solsido, opts: ExerciseOptions) => {
   let [time, order, nb] = opts
+
+  let _high = getHighLocal(opts)
+
+  let _result = createSignal()
 
   let next_key = make_next_key(order, nb)
 
@@ -110,7 +141,7 @@ const make_current = (solsido: Solsido, opts: ExerciseOptions) => {
 
   let m_time = createMemo(() => {
     let _ = read(_time)
-    let res =  time === 0 ? ticks.seconds * 60 - _ : _
+    let res =  time === 0 ? Math.max(0, ticks.seconds * 60 - _) : _
     return res / 1000
   })
 
@@ -147,6 +178,39 @@ const make_current = (solsido: Solsido, opts: ExerciseOptions) => {
 
   let m_playing_bras = createMemo(() => read(_correct_notes).map((no_flat_note, i) => `whole_note,live@${i * m_gap_note() + m_i_wnote() * 0.3 + 1.5},${note_bra_y(no_flat_note)*0.125}`))
 
+  let self = {
+    get result() {
+      return read(_result)
+    },
+    get score() {
+      return read(_score)
+    },
+    get score_klass() {
+      return m_score_klass()
+    },
+    get time() {
+      return m_time()
+    },
+    set playing_note(note: Note | undefined) {
+      owrite(_playing_note, note)
+    },
+    get bras() {
+      return [...m_bras(), ...m_playing_bras()]
+    },
+    get klass() {
+      return m_klass()
+    },
+    get majorKey() {
+      return m_majorKey()
+    },
+    get header() {
+      return [h_time[time], h_order[order], h_nb[nb]].join(' ')
+    },
+    cancel() {
+      solsido._exercises.cancel()
+    }
+  }
+
   createEffect(on(_correct_notes[0], v => {
     if (v.length === 8) {
       let _n = next_key(read(_key))
@@ -177,38 +241,27 @@ const make_current = (solsido: Solsido, opts: ExerciseOptions) => {
     }
   }))
 
-  return {
-    get score() {
-      return read(_score)
-    },
-    get score_klass() {
-      return m_score_klass()
-    },
-    get time() {
-      return m_time()
-    },
-    set playing_note(note: Note | undefined) {
-      owrite(_playing_note, note)
-    },
-    get bras() {
-      return [...m_bras(), ...m_playing_bras()]
-    },
-    get klass() {
-      return m_klass()
-    },
-    get majorKey() {
-      return m_majorKey()
-    },
-    get header() {
-      return [h_time[time], h_order[order], h_nb[nb]].join(' ')
-    },
-    cancel() {
-      solsido._exercises.cancel()
+  createEffect(on(m_time, (t, p) => {
+    if (t - p < 0 && t === 0) {
+      let __high = read(_high)
+      let score = read(_score)
+      let high = Math.max(__high, score)
+      owrite(_result, high)
+      owrite(_high, _ => high)
+      solsido.major_you.stop_major(self)
     }
-  }
+  }))
+
+
+
+  return self
 }
 
 const make_exercises = (solsido: Solsido) => {
+
+  let _time = createLocal('time', 0),
+    _order = createLocal('order', 0),
+    _nb = createLocal('nb', 0)
 
   let _current = createSignal()
   let m_current = createMemo(() => {
@@ -228,12 +281,20 @@ const make_exercises = (solsido: Solsido) => {
     }
   }))
 
+  let m_dton = createMemo(() => [read(_time), read(_order), read(_nb)])
 
   return {
+    get dton() {
+      return m_dton()
+    },
     get current() {
       return m_current()
     },
     start(opts: ExerciseOptions) {
+
+      owrite(_time, opts[0])
+      owrite(_order, opts[1])
+      owrite(_nb, opts[2])
       owrite(solsido._user_click, true)
       owrite(_current, opts)
     },
