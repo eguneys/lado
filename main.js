@@ -7,6 +7,7 @@ var Lado = (function () {
   }
 
   const equalFn$1 = (a, b) => a === b;
+  const $PROXY = Symbol("solid-proxy");
   const $TRACK$1 = Symbol("solid-track");
   const signalOptions$1 = {
     equals: equalFn$1
@@ -598,6 +599,58 @@ var Lado = (function () {
   function createComponent$1(Comp, props) {
     return untrack$1(() => Comp(props || {}));
   }
+  function trueFn() {
+    return true;
+  }
+  const propTraps = {
+    get(_, property, receiver) {
+      if (property === $PROXY) return receiver;
+      return _.get(property);
+    },
+    has(_, property) {
+      return _.has(property);
+    },
+    set: trueFn,
+    deleteProperty: trueFn,
+    getOwnPropertyDescriptor(_, property) {
+      return {
+        configurable: true,
+        enumerable: true,
+        get() {
+          return _.get(property);
+        },
+        set: trueFn,
+        deleteProperty: trueFn
+      };
+    },
+    ownKeys(_) {
+      return _.keys();
+    }
+  };
+  function resolveSource(s) {
+    return (s = typeof s === "function" ? s() : s) == null ? {} : s;
+  }
+  function mergeProps(...sources) {
+    return new Proxy({
+      get(property) {
+        for (let i = sources.length - 1; i >= 0; i--) {
+          const v = resolveSource(sources[i])[property];
+          if (v !== undefined) return v;
+        }
+      },
+      has(property) {
+        for (let i = sources.length - 1; i >= 0; i--) {
+          if (property in resolveSource(sources[i])) return true;
+        }
+        return false;
+      },
+      keys() {
+        const keys = [];
+        for (let i = 0; i < sources.length; i++) keys.push(...Object.keys(resolveSource(sources[i])));
+        return [...new Set(keys)];
+      }
+    }, propTraps);
+  }
 
   function For$1(props) {
     const fallback = "fallback" in props && {
@@ -875,6 +928,18 @@ var Lado = (function () {
     return [node];
   }
 
+  const rate = 1000 / 60;
+  const ticks = {
+    seconds: 60 * rate,
+    half: 30 * rate,
+    thirds: 20 * rate,
+    lengths: 15 * rate,
+    sixth: 10 * rate,
+    five: 5 * rate,
+    three: 3 * rate,
+    one: 1 * rate
+  };
+
   class Vec2$1 {
     static from_angle = n => new Vec2$1(Math.cos(n), Math.sin(n));
     static make = (x, y) => new Vec2$1(x, y);
@@ -1071,6 +1136,12 @@ var Lado = (function () {
     } else {
       signal[1](_ => fn);
     }
+  }
+  function write(signal, fn) {
+    return signal[1](_ => {
+      fn(_);
+      return _;
+    });
   }
   function read$1(signal) {
     if (Array.isArray(signal)) {
@@ -2984,6 +3055,37 @@ var Lado = (function () {
   const perfect_c_flats = [...Array(7)].reduce((acc, _) => [...acc, transpose$1(acc[acc.length - 1], 'P4')], ['C']);
   const majorKey = _ => index$2.majorKey(_);
 
+  const make_storage = storage => {
+    let api = {
+      get: k => storage.getItem(k),
+      set: (k, v) => storage.setItem(k, v),
+      remove: k => storage.removeItem(k),
+      make: k => ({
+        get: () => api.get(k),
+        set: v => api.set(k, v),
+        remove: () => api.remove(k)
+      })
+    };
+    return api;
+  };
+
+  const storage = make_storage(window.localStorage);
+
+  const createLocal = (key, _default, opts) => {
+    let _s = storage.make(key);
+
+    let _ = createSignal$1(parseInt(_s.get()) || _default, opts);
+
+    createEffect(on(_[0], (v, p) => {
+      if (v === undefined) {
+        _s.remove();
+      } else {
+        _s.set(v);
+      }
+    }));
+    return _;
+  };
+
   const getPlayerController = async input => {
     if (input) {
       let srcs = {};
@@ -2998,6 +3100,9 @@ var Lado = (function () {
   };
 
   class Solsido {
+    onClick() {//owrite(this._user_click, true)
+    }
+
     onScroll() {
       this.ref.$clear_bounds();
     }
@@ -3010,12 +3115,249 @@ var Lado = (function () {
       this._user_click = createSignal$1(false);
       this.r_pc = createResource(this._user_click[0], getPlayerController);
       this.ref = make_ref$1();
+      this._exercises = make_exercises(this);
       this._majors = make_majors(this);
       this.major_playback = make_playback$1(this);
       this.major_you = make_you(this);
     }
 
   }
+
+  function shuffleArr(array) {
+    for (var i = array.length - 1; i > 0; i--) {
+      var rand = Math.floor(Math.random() * (i + 1));
+      [array[i], array[rand]] = [array[rand], array[i]];
+    }
+  }
+
+  const make_next_key = (order, nb) => {
+    let perfects = [[...perfect_c_sharps, ...perfect_c_flats], perfect_c_sharps, perfect_c_flats];
+
+    let _res = perfects[nb].slice(0);
+
+    if (order === 0) {
+      shuffleArr(_res);
+    }
+
+    return key => {
+      let i = key === undefined ? 0 : _res.indexOf(key) + 1;
+      return _res[i];
+    };
+  };
+
+  const getHighLocal = (() => {
+    const key = (order, nb) => [order, nb].join('_');
+
+    let _ = {};
+    let orders = [0, 1];
+    let nbs = [0, 1, 2];
+    orders.forEach(order => nbs.forEach(nb => {
+      let _key = key(order, nb);
+
+      _[_key] = createLocal(_key, 0);
+    }));
+    return opts => {
+      let [time, order, nb] = opts;
+      return _[key(order, nb)];
+    };
+  })();
+
+  const make_current = (solsido, opts) => {
+    let [time, order, nb, hints] = opts;
+
+    let _show_hints = hints === 1;
+
+    let _high = getHighLocal(opts);
+
+    let _result = createSignal$1();
+
+    let next_key = make_next_key(order, nb);
+    let h_time = ['Challenge', 'Free'];
+    let h_order = ['', 'Sorted'];
+    let h_nb = ['', 'Sharps', 'Flats'];
+
+    let _score = createSignal$1(0);
+
+    let _red_time = createSignal$1();
+
+    let _time = createSignal$1(0);
+
+    let cancel = loop((dt, dt0) => {
+      owrite$1(_time, _ => _ += dt);
+    });
+    let m_red_score = createMemo$1(() => {
+      let red_time = read$1(_red_time);
+
+      if (red_time) {
+        return read$1(_time) - red_time < ticks.half;
+      }
+    });
+    let m_time = createMemo$1(() => {
+      let _ = read$1(_time);
+
+      let res = time === 0 ? Math.max(0, ticks.seconds * 60 - _) : _;
+      return res / 1000;
+    });
+    onCleanup$1(() => {
+      cancel();
+    });
+    let m_klass = createMemo$1(() => ['you']);
+    let m_score_klass = createMemo$1(() => [m_red_score() ? 'red' : '']);
+
+    let _playing_note = createSignal$1();
+
+    let _key = createSignal$1(next_key());
+
+    let m_majorKey = createMemo$1(() => majorKey(read$1(_key)));
+    let m__ns = createMemo$1(() => scale_in_notes(m_majorKey().scale));
+    let m__ks = createMemo$1(() => key_signatures(m_majorKey().keySignature));
+    let m_i_wnote = createMemo$1(() => m__ks().length);
+    let m_gap_note = createMemo$1(() => 1.3 - m_i_wnote() / 8 * 0.3);
+    let m_notes = createMemo$1(() => m__ns().map(n => m_majorKey().scale.find(_ => _[0] === n[0]) + n[1]));
+    let m_bras = createMemo$1(() => ['gclef@0.2,0', ...m__ks(), ...(!_show_hints ? [] : m__ns().map((_, i) => `whole_note,ghost@${i * m_gap_note() + m_i_wnote() * 0.3 + 1.5},${note_bra_y(_) * 0.125}`))]);
+
+    let _correct_notes = createSignal$1([], {
+      equals: false
+    });
+
+    let m_playing_bras = createMemo$1(() => read$1(_correct_notes).map((no_flat_note, i) => `whole_note,live@${i * m_gap_note() + m_i_wnote() * 0.3 + 1.5},${note_bra_y(no_flat_note) * 0.125}`));
+    let self = {
+      get result() {
+        return read$1(_result);
+      },
+
+      get score() {
+        return read$1(_score);
+      },
+
+      get score_klass() {
+        return m_score_klass();
+      },
+
+      get time() {
+        return m_time();
+      },
+
+      get show_hints() {
+        return _show_hints;
+      },
+
+      set playing_note(note) {
+        owrite$1(_playing_note, note);
+      },
+
+      get bras() {
+        return [...m_bras(), ...m_playing_bras()];
+      },
+
+      get klass() {
+        return m_klass();
+      },
+
+      get majorKey() {
+        return m_majorKey();
+      },
+
+      get header() {
+        return [h_time[time], h_order[order], h_nb[nb]].join(' ');
+      },
+
+      cancel() {
+        solsido._exercises.cancel();
+      }
+
+    };
+    createEffect(on(_correct_notes[0], v => {
+      if (v.length === 8) {
+        let _n = next_key(read$1(_key));
+
+        if (_n) {
+          owrite$1(_score, _ => _ + 1);
+          owrite$1(_key, _n);
+          owrite$1(_correct_notes, []);
+        }
+      }
+    }));
+    createEffect(on(_playing_note[0], (note, p) => {
+      if (!p && !!note) {
+        let _ = m_notes()[read$1(_correct_notes).length];
+
+        let correct = (_ === note || enharmonic(_) === note) && _;
+
+        if (correct) {
+          let _note = correct;
+          let no_flat_note = _note[0] + _note[_note.length - 1];
+          write(_correct_notes, _ => _.push(no_flat_note));
+        } else {
+          owrite$1(_red_time, read$1(_time));
+          owrite$1(_correct_notes, []);
+        }
+      }
+    }));
+    createEffect(on(m_time, (t, p) => {
+      if (t - p < 0 && t === 0) {
+        let __high = read$1(_high);
+
+        let score = read$1(_score);
+        let high = Math.max(__high, score);
+        owrite$1(_result, high);
+        owrite$1(_high, _ => high);
+        solsido.major_you.stop_major(self);
+      }
+    }));
+    return self;
+  };
+
+  const make_exercises = solsido => {
+    let _time = createLocal('time', 0),
+        _order = createLocal('order', 0),
+        _nb = createLocal('nb', 0),
+        _hints = createLocal('hints', 0);
+
+    let _current = createSignal$1();
+
+    let m_current = createMemo$1(() => {
+      let current = read$1(_current);
+
+      if (current) {
+        return make_current(solsido, current);
+      }
+    });
+    createEffect(on(m_current, (v, p) => {
+      if (v) {
+        solsido.major_you.play_major(v);
+      } else {
+        if (!!p) {
+          solsido.major_you.stop_major(p);
+        }
+      }
+    }));
+    let m_dton = createMemo$1(() => [read$1(_time), read$1(_order), read$1(_nb), read$1(_hints)]);
+    return {
+      get dton() {
+        return m_dton();
+      },
+
+      get current() {
+        return m_current();
+      },
+
+      start(opts) {
+        owrite$1(_time, opts[0]);
+        owrite$1(_order, opts[1]);
+        owrite$1(_nb, opts[2]);
+        owrite$1(_hints, opts[3]);
+        owrite$1(solsido._user_click, true);
+        owrite$1(_current, opts);
+      },
+
+      cancel() {
+        owrite$1(_current, undefined);
+      }
+
+    };
+  };
+
   let synth = {
     adsr: {
       a: 0,
@@ -4974,15 +5316,30 @@ var Lado = (function () {
 
   const _tmpl$ = /*#__PURE__*/template$1(`<solsido></solsido>`),
         _tmpl$2 = /*#__PURE__*/template$1(`<h2> Major Key Exercise </h2>`),
-        _tmpl$3 = /*#__PURE__*/template$1(`<div class="key-controls"><group class="radio"><div><input id="time_min" name="time" type="radio"><label for="time_min">1 Min.</label></div><div><input id="time_no" name="time" type="radio"><label for="time_no">No time</label></div></group><group class="radio"><div><input id="order_random" name="order" type="radio"><label for="order_random"> Random </label></div><div><input id="order_sorted" name="order" type="radio"><label for="order_sorted"> Sorted </label></div></group><group class="radio"><div><input id="nb_all" name="nb" type="radio"><label for="nb_all"> All </label></div><div><input id="nb_sharps" name="nb" type="radio"><label for="nb_sharps">Sharps</label></div><div><input id="nb_flats" name="nb" type="radio"><label for="nb_flats">Flats</label></div></group><span class="icon"> Start </span></div>`),
-        _tmpl$4 = /*#__PURE__*/template$1(`<div class="key-exercise"><div> <!> </div></div>`),
-        _tmpl$5 = /*#__PURE__*/template$1(`<h2> Major Key Signatures </h2>`),
-        _tmpl$6 = /*#__PURE__*/template$1(`<div class="key-signatures"><div> <!> </div></div>`),
-        _tmpl$7 = /*#__PURE__*/template$1(`<div></div>`),
-        _tmpl$8 = /*#__PURE__*/template$1(`<div class="cmajor-exercise"><div class="header"></div><div></div></div>`),
-        _tmpl$9 = /*#__PURE__*/template$1(`<div class="cmajor"><div class="header"><label> <span class="major-type"></span> </label><div class="controls"></div></div><div><div> </div></div></div>`),
-        _tmpl$10 = /*#__PURE__*/template$1(`<span class="bra"></span>`),
-        _tmpl$11 = /*#__PURE__*/template$1(`<span class="icon"></span>`);
+        _tmpl$3 = /*#__PURE__*/template$1(`<div class="key-exercise"><div> <!> </div></div>`),
+        _tmpl$4 = /*#__PURE__*/template$1(`<div class="key-current"><span class="icon small">Restart</span><div class="box flex"><h4></h4></div><div class="scores"><div class="box status"><h4>High Score</h4><span></span></div></div></div>`),
+        _tmpl$5 = /*#__PURE__*/template$1(`<h3> <span class="major-type"></span> </h3>`),
+        _tmpl$6 = /*#__PURE__*/template$1(`<div class="key-current"><span class="icon small">Restart</span><div class="box flex"><h4></h4></div><div class="scores"><div class="box status"><h4>Score</h4><span></span></div><div class="box status"><h4> Time </h4><span></span></div></div><div class="major status"></div></div>`),
+        _tmpl$7 = /*#__PURE__*/template$1(`<div class="key-controls"><group class="radio"><div><input id="time_min" name="time" type="radio"><label for="time_min">1 Minute</label></div><div><input id="time_no" name="time" type="radio"><label for="time_no">No time</label></div></group><group class="radio"><div><input id="order_random" name="order" type="radio"><label for="order_random">Random</label></div><div><input id="order_sorted" name="order" type="radio"><label for="order_sorted">Sorted</label></div></group><group class="radio"><div><input id="nb_all" name="nb" type="radio"><label for="nb_all">All</label></div><div><input id="nb_sharps" name="nb" type="radio"><label for="nb_sharps">Sharps</label></div><div><input id="nb_flats" name="nb" type="radio"><label for="nb_flats">Flats</label></div></group><div class="switch"><div><input id="use_hints" name="use_hints" type="checkbox"><label for="use_hints">Show Hints</label></div></div><span class="icon">Start</span></div>`),
+        _tmpl$8 = /*#__PURE__*/template$1(`<h2> Major Key Signatures </h2>`),
+        _tmpl$9 = /*#__PURE__*/template$1(`<div class="key-signatures"><div> <!> </div></div>`),
+        _tmpl$10 = /*#__PURE__*/template$1(`<div></div>`),
+        _tmpl$11 = /*#__PURE__*/template$1(`<div class="cmajor-exercise"><div></div></div>`),
+        _tmpl$12 = /*#__PURE__*/template$1(`<div class="cmajor"><div class="header"><h3> <span class="major-type"></span> </h3><div class="controls"></div></div><div><div> </div></div></div>`),
+        _tmpl$13 = /*#__PURE__*/template$1(`<span class="bra"></span>`),
+        _tmpl$14 = /*#__PURE__*/template$1(`<span class="icon"></span>`);
+
+  function format_time(n) {
+    var sec_num = parseInt(n, 10);
+    var minutes = Math.floor(sec_num / 60);
+    var seconds = sec_num - minutes * 60;
+
+    if (seconds < 10) {
+      seconds = '0' + seconds;
+    }
+
+    return minutes + ':' + seconds;
+  }
 
   function unbindable(el, eventName, callback, options) {
     el.addEventListener(eventName, callback, options);
@@ -5004,7 +5361,14 @@ var Lado = (function () {
 
       (_ => setTimeout(() => solsido.ref.$ref = _))(_el$);
 
-      insert$1(_el$, createComponent$1(KeyExercises, {}), null);
+      _el$.$$click = _ => solsido.onClick();
+
+      insert$1(_el$, createComponent$1(KeyExercises, {
+        get exercises() {
+          return solsido._exercises;
+        }
+
+      }), null);
 
       insert$1(_el$, createComponent$1(KeySignatures, {
         get majors() {
@@ -5018,77 +5382,249 @@ var Lado = (function () {
   };
 
   const KeyExercises = props => {
-    return [_tmpl$2.cloneNode(true), (() => {
+    return [_tmpl$2.cloneNode(true), createComponent$1(Show$1, {
+      get when() {
+        return props.exercises.current;
+      },
+
+      get fallback() {
+        return createComponent$1(KeyExerciseControls, {
+          get exercises() {
+            return props.exercises;
+          }
+
+        });
+      },
+
+      children: current => createComponent$1(Show$1, {
+        get when() {
+          return current.result !== undefined;
+        },
+
+        get fallback() {
+          return createComponent$1(KeyExerciseCurrent, {
+            current: current
+          });
+        },
+
+        get children() {
+          return createComponent$1(KeyExerciseResults, {
+            current: current
+          });
+        }
+
+      })
+    }), (() => {
       const _el$3 = _tmpl$3.cloneNode(true),
             _el$4 = _el$3.firstChild,
             _el$5 = _el$4.firstChild,
-            _el$6 = _el$5.firstChild,
-            _el$7 = _el$4.nextSibling,
-            _el$8 = _el$7.firstChild,
-            _el$9 = _el$8.firstChild,
-            _el$10 = _el$7.nextSibling,
-            _el$11 = _el$10.firstChild,
-            _el$12 = _el$11.firstChild;
+            _el$7 = _el$5.nextSibling;
+            _el$7.nextSibling;
 
-      _el$6.checked = true;
-      _el$9.checked = true;
-      _el$12.checked = true;
+      insert$1(_el$4, createComponent$1(CMajorExercise, {
+        get current() {
+          return props.exercises.current;
+        }
+
+      }), _el$7);
+
       return _el$3;
-    })(), (() => {
-      const _el$13 = _tmpl$4.cloneNode(true),
-            _el$14 = _el$13.firstChild,
-            _el$15 = _el$14.firstChild,
-            _el$17 = _el$15.nextSibling;
-            _el$17.nextSibling;
-
-      insert$1(_el$14, createComponent$1(CMajorExercise, {}), _el$17);
-
-      return _el$13;
     })()];
   };
 
-  const KeySignatures = props => {
-    return [_tmpl$5.cloneNode(true), (() => {
-      const _el$19 = _tmpl$6.cloneNode(true),
-            _el$20 = _el$19.firstChild,
-            _el$21 = _el$20.firstChild,
-            _el$23 = _el$21.nextSibling;
-            _el$23.nextSibling;
+  const KeyExerciseResults = props => {
+    return (() => {
+      const _el$8 = _tmpl$4.cloneNode(true),
+            _el$9 = _el$8.firstChild,
+            _el$10 = _el$9.nextSibling,
+            _el$11 = _el$10.firstChild,
+            _el$12 = _el$10.nextSibling,
+            _el$13 = _el$12.firstChild,
+            _el$14 = _el$13.firstChild,
+            _el$15 = _el$14.nextSibling;
 
-      insert$1(_el$20, createComponent$1(CMajor, {
+      _el$9.$$click = () => props.current.cancel();
+
+      insert$1(_el$11, () => props.current.header);
+
+      insert$1(_el$15, () => props.current.result);
+
+      createRenderEffect$1(() => className$1(_el$15, props.current.score_klass));
+
+      return _el$8;
+    })();
+  };
+
+  const KeyExerciseCurrent = props => {
+    return (() => {
+      const _el$16 = _tmpl$6.cloneNode(true),
+            _el$17 = _el$16.firstChild,
+            _el$18 = _el$17.nextSibling,
+            _el$19 = _el$18.firstChild,
+            _el$20 = _el$18.nextSibling,
+            _el$21 = _el$20.firstChild,
+            _el$22 = _el$21.firstChild,
+            _el$23 = _el$22.nextSibling,
+            _el$24 = _el$21.nextSibling,
+            _el$25 = _el$24.firstChild,
+            _el$26 = _el$25.nextSibling,
+            _el$27 = _el$20.nextSibling;
+
+      _el$17.$$click = () => props.current.cancel();
+
+      insert$1(_el$19, () => props.current.header);
+
+      insert$1(_el$23, () => props.current.score);
+
+      insert$1(_el$26, () => format_time(props.current.time));
+
+      insert$1(_el$27, createComponent$1(Show$1, {
+        get when() {
+          return props.current.show_hints;
+        },
+
+        get children() {
+          const _el$28 = _tmpl$5.cloneNode(true),
+                _el$29 = _el$28.firstChild,
+                _el$30 = _el$29.nextSibling;
+
+          insert$1(_el$28, () => createComponent$1(Tonic, {
+            get tonic() {
+              return props.current.majorKey.tonic;
+            }
+
+          }), _el$29);
+
+          insert$1(_el$30, () => props.current.majorKey.type);
+
+          return _el$28;
+        }
+
+      }));
+
+      createRenderEffect$1(() => className$1(_el$23, props.current.score_klass));
+
+      return _el$16;
+    })();
+  };
+
+  const KeyExerciseControls = props => {
+    let $time_min, $time_no, $order_random, $order_sorted, $nb_all, $nb_sharps, $nb_flats;
+    let $use_hints;
+
+    const checkeds = () => {
+      let _$times = [$time_min, $time_no];
+      let _$orders = [$order_random, $order_sorted];
+      let _$nbs = [$nb_all, $nb_sharps, $nb_flats];
+      return [...[_$times, _$orders, _$nbs].map(_ => _.findIndex(_ => _.checked)), $use_hints.checked ? 1 : 0];
+    };
+
+    let e = props.exercises;
+    return (() => {
+      const _el$31 = _tmpl$7.cloneNode(true),
+            _el$32 = _el$31.firstChild,
+            _el$33 = _el$32.firstChild,
+            _el$34 = _el$33.firstChild,
+            _el$35 = _el$33.nextSibling,
+            _el$36 = _el$35.firstChild,
+            _el$37 = _el$32.nextSibling,
+            _el$38 = _el$37.firstChild,
+            _el$39 = _el$38.firstChild,
+            _el$40 = _el$38.nextSibling,
+            _el$41 = _el$40.firstChild,
+            _el$42 = _el$37.nextSibling,
+            _el$43 = _el$42.firstChild,
+            _el$44 = _el$43.firstChild,
+            _el$45 = _el$43.nextSibling,
+            _el$46 = _el$45.firstChild,
+            _el$47 = _el$45.nextSibling,
+            _el$48 = _el$47.firstChild,
+            _el$49 = _el$42.nextSibling,
+            _el$50 = _el$49.firstChild,
+            _el$51 = _el$50.firstChild,
+            _el$52 = _el$49.nextSibling;
+
+      const _ref$ = $time_min;
+      typeof _ref$ === "function" ? _ref$(_el$34) : $time_min = _el$34;
+      const _ref$2 = $time_no;
+      typeof _ref$2 === "function" ? _ref$2(_el$36) : $time_no = _el$36;
+      const _ref$3 = $order_random;
+      typeof _ref$3 === "function" ? _ref$3(_el$39) : $order_random = _el$39;
+      const _ref$4 = $order_sorted;
+      typeof _ref$4 === "function" ? _ref$4(_el$41) : $order_sorted = _el$41;
+      const _ref$5 = $nb_all;
+      typeof _ref$5 === "function" ? _ref$5(_el$44) : $nb_all = _el$44;
+      const _ref$6 = $nb_sharps;
+      typeof _ref$6 === "function" ? _ref$6(_el$46) : $nb_sharps = _el$46;
+      const _ref$7 = $nb_flats;
+      typeof _ref$7 === "function" ? _ref$7(_el$48) : $nb_flats = _el$48;
+      const _ref$8 = $use_hints;
+      typeof _ref$8 === "function" ? _ref$8(_el$51) : $use_hints = _el$51;
+
+      _el$52.$$click = () => props.exercises.start(checkeds());
+
+      createRenderEffect$1(() => _el$34.checked = e.dton[0] === 0);
+
+      createRenderEffect$1(() => _el$36.checked = e.dton[0] === 1);
+
+      createRenderEffect$1(() => _el$39.checked = e.dton[1] === 0);
+
+      createRenderEffect$1(() => _el$41.checked = e.dton[1] === 1);
+
+      createRenderEffect$1(() => _el$44.checked = e.dton[2] === 0);
+
+      createRenderEffect$1(() => _el$46.checked = e.dton[2] === 1);
+
+      createRenderEffect$1(() => _el$48.checked = e.dton[2] === 2);
+
+      createRenderEffect$1(() => _el$51.checked = e.dton[3] === 1);
+
+      return _el$31;
+    })();
+  };
+
+  const KeySignatures = props => {
+    return [_tmpl$8.cloneNode(true), (() => {
+      const _el$54 = _tmpl$9.cloneNode(true),
+            _el$55 = _el$54.firstChild,
+            _el$56 = _el$55.firstChild,
+            _el$58 = _el$56.nextSibling;
+            _el$58.nextSibling;
+
+      insert$1(_el$55, createComponent$1(CMajor, {
         get major() {
           return props.majors.c_major;
         }
 
-      }), _el$23);
+      }), _el$58);
 
-      insert$1(_el$19, createComponent$1(For$1, {
+      insert$1(_el$54, createComponent$1(For$1, {
         get each() {
           return props.majors.sharps_flats_zipped;
         },
 
         children: major => (() => {
-          const _el$24 = _tmpl$7.cloneNode(true);
+          const _el$59 = _tmpl$10.cloneNode(true);
 
-          insert$1(_el$24, createComponent$1(CMajor, {
+          insert$1(_el$59, createComponent$1(CMajor, {
             get major() {
               return major[0];
             }
 
           }), null);
 
-          insert$1(_el$24, createComponent$1(CMajor, {
+          insert$1(_el$59, createComponent$1(CMajor, {
             get major() {
               return major[1];
             }
 
           }), null);
 
-          return _el$24;
+          return _el$59;
         })()
       }), null);
 
-      return _el$19;
+      return _el$54;
     })()];
   };
 
@@ -5107,25 +5643,24 @@ var Lado = (function () {
       });
     });
     return (() => {
-      const _el$25 = _tmpl$7.cloneNode(true);
+      const _el$60 = _tmpl$10.cloneNode(true);
 
-      const _ref$ = $ref;
-      typeof _ref$ === "function" ? _ref$(_el$25) : $ref = _el$25;
-      return _el$25;
+      const _ref$9 = $ref;
+      typeof _ref$9 === "function" ? _ref$9(_el$60) : $ref = _el$60;
+      return _el$60;
     })();
   };
 
   const CMajorExercise = props => {
     return (() => {
-      const _el$26 = _tmpl$8.cloneNode(true),
-            _el$27 = _el$26.firstChild,
-            _el$28 = _el$27.nextSibling;
+      const _el$61 = _tmpl$11.cloneNode(true),
+            _el$62 = _el$61.firstChild;
 
-      insert$1(_el$28, createComponent$1(_VStaff, {}));
+      insert$1(_el$62, createComponent$1(_VStaff, mergeProps(() => props.current)));
 
-      createRenderEffect$1(() => className$1(_el$28, ['major-staff'].join(' ')));
+      createRenderEffect$1(() => className$1(_el$62, ['major-staff', props.current?.klass || ''].join(' ')));
 
-      return _el$26;
+      return _el$61;
     })();
   };
 
@@ -5152,29 +5687,29 @@ var Lado = (function () {
     let _show_controls = createSignal$1(false);
 
     return (() => {
-      const _el$29 = _tmpl$9.cloneNode(true),
-            _el$30 = _el$29.firstChild,
-            _el$31 = _el$30.firstChild,
-            _el$32 = _el$31.firstChild,
-            _el$33 = _el$32.nextSibling,
-            _el$34 = _el$31.nextSibling,
-            _el$35 = _el$30.nextSibling,
-            _el$36 = _el$35.firstChild;
+      const _el$63 = _tmpl$12.cloneNode(true),
+            _el$64 = _el$63.firstChild,
+            _el$65 = _el$64.firstChild,
+            _el$66 = _el$65.firstChild,
+            _el$67 = _el$66.nextSibling,
+            _el$68 = _el$65.nextSibling,
+            _el$69 = _el$64.nextSibling,
+            _el$70 = _el$69.firstChild;
 
-      _el$29.$$mouseover = _ => owrite$1(_show_controls, true);
+      _el$63.$$mouseover = _ => owrite$1(_show_controls, true);
 
-      _el$29.addEventListener("mouseleave", _ => owrite$1(_show_controls, false));
+      _el$63.addEventListener("mouseleave", _ => owrite$1(_show_controls, false));
 
-      insert$1(_el$31, () => createComponent$1(Tonic, {
+      insert$1(_el$65, () => createComponent$1(Tonic, {
         get tonic() {
           return props.major.majorKey.tonic;
         }
 
-      }), _el$32);
+      }), _el$66);
 
-      insert$1(_el$33, () => props.major.majorKey.type);
+      insert$1(_el$67, () => props.major.majorKey.type);
 
-      insert$1(_el$34, createComponent$1(Show$1, {
+      insert$1(_el$68, createComponent$1(Show$1, {
         get when() {
           return read$1(_show_controls);
         },
@@ -5207,12 +5742,12 @@ var Lado = (function () {
 
       }));
 
-      const _ref$2 = $ref;
-      typeof _ref$2 === "function" ? _ref$2(_el$36) : $ref = _el$36;
+      const _ref$10 = $ref;
+      typeof _ref$10 === "function" ? _ref$10(_el$70) : $ref = _el$70;
 
-      createRenderEffect$1(() => className$1(_el$35, ['major-staff', ...props.major.klass].join(' ')));
+      createRenderEffect$1(() => className$1(_el$69, ['major-staff', ...props.major.klass].join(' ')));
 
-      return _el$29;
+      return _el$63;
     })();
   };
 
@@ -5223,11 +5758,11 @@ var Lado = (function () {
       },
 
       get children() {
-        const _el$37 = _tmpl$10.cloneNode(true);
+        const _el$71 = _tmpl$13.cloneNode(true);
 
-        insert$1(_el$37, () => g['flat_accidental']);
+        insert$1(_el$71, () => g['flat_accidental']);
 
-        return _el$37;
+        return _el$71;
       }
 
     }), createComponent$1(Show$1, {
@@ -5236,11 +5771,11 @@ var Lado = (function () {
       },
 
       get children() {
-        const _el$38 = _tmpl$10.cloneNode(true);
+        const _el$72 = _tmpl$13.cloneNode(true);
 
-        insert$1(_el$38, () => g['sharp_accidental']);
+        insert$1(_el$72, () => g['sharp_accidental']);
 
-        return _el$38;
+        return _el$72;
       }
 
     })];
@@ -5248,19 +5783,19 @@ var Lado = (function () {
 
   const Icon = props => {
     return (() => {
-      const _el$39 = _tmpl$11.cloneNode(true);
+      const _el$73 = _tmpl$14.cloneNode(true);
 
-      addEventListener(_el$39, "click", props.onClick, true);
+      addEventListener(_el$73, "click", props.onClick, true);
 
-      insert$1(_el$39, () => props.children);
+      insert$1(_el$73, () => props.children);
 
-      createRenderEffect$1(() => setAttribute$1(_el$39, "title", props.title));
+      createRenderEffect$1(() => setAttribute$1(_el$73, "title", props.title));
 
-      return _el$39;
+      return _el$73;
     })();
   };
 
-  delegateEvents(["mouseover", "click"]);
+  delegateEvents(["click", "mouseover"]);
 
   function Lado(element, options = {}) {
     let solsido = new Solsido();
