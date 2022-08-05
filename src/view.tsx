@@ -41,10 +41,13 @@ const App = props => {
         <label for="tn-tg" class="hbg"> <span class="hbg_in"></span></label>
         <nav id="topnav">
           <section><Link href="/"> lasolsido.org </Link></section>
-          <section> <NavLink href="/rhythm"> Rhythm </NavLink> </section>
-          <section> <NavLink href="/key"> Key Signatures </NavLink> </section>
+          <section> <NavLink href="/rhythm">Rhythm</NavLink> </section>
+          <section> <NavLink href="/key">Key Signatures</NavLink> </section>
           
         </nav>
+        <h1 class='site-title'>
+          <Link href={location.pathname}>{location.pathname}</Link>
+        </h1>
       </header>
       <div id='main-wrap'>
         <Routes>
