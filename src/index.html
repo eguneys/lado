@@ -32,8 +32,9 @@ body, input {
   </head>
   <body>
     <div id='app' class='is2d'></div>
-    <script>
+    <script type="module">
 
+      import Lado from './main.js'
       document.addEventListener("DOMContentLoaded", () => {
               let api = Lado(document.getElementById('app'), {})
       })
