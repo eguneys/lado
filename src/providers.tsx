@@ -1,9 +1,11 @@
 import { createContext, useContext } from 'solid-js'
+import Solsido from './solsido'
 
 const SolsidoContext = createContext()
 
 export function SolsidoProvider(props) {
-  return (<SolsidoContext.Provider value={props.solsido}>
+  let solsido = new Solsido(props.options)
+  return (<SolsidoContext.Provider value={solsido}>
       {props.children}
       </SolsidoContext.Provider>)
 }

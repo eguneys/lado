@@ -59,10 +59,11 @@ const App = props => {
      </>)
 }
 
-export const AppWithRouter = solsido => props => {
-  return (<SolsidoProvider solsido={solsido}>
+export const AppWithRouter = options => props => {
+  return (
     <Router>
+    <SolsidoProvider options={options}>
       <App/>
-    </Router>
-  </SolsidoProvider>)
+      </SolsidoProvider>
+    </Router>)
 }

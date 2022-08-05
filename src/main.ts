@@ -8,9 +8,7 @@ import { AppWithRouter } from './view'
 
 export default function Lado(element: HTMLElement, options = {}) {
 
-  let solsido = new Solsido()
-
-  render(AppWithRouter(solsido), element)
+  render(AppWithRouter(options), element)
 
   return {
   }

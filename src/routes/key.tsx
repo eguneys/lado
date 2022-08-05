@@ -3,6 +3,7 @@ import VStaff from 'vstaff'
 import g from '../music/glyphs'
 import { read, write, owrite } from '../play'
 import { useSolsido } from '../providers'
+import Sol_Key from '../sol_key'
 
 let $time_min, $time_no, $order_random, $order_sorted, $nb_all, $nb_sharps, $nb_flats
 
@@ -32,11 +33,11 @@ function format_time(n: number) {
 
 export const Key = props => {
 
-  let solsido = useSolsido()
+  let sol_key = new Sol_Key(useSolsido())
 
   return (<main>
-      <KeyExercises exercises={solsido._exercises}/>
-      <KeySignatures majors={solsido._majors} />
+      <KeyExercises exercises={sol_key._exercises}/>
+      <KeySignatures majors={sol_key._majors} />
       </main>)
 }
 
