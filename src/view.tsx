@@ -2,6 +2,7 @@ import { createEffect, onCleanup, lazy } from 'solid-js'
 import { useLocation, Router, Routes, Route, Link, NavLink } from '@solidjs/router'
 import { Home } from './routes/home'
 import { Key } from './routes/key'
+import { Rhythm } from './routes/rhythm'
 import { useSolsido, SolsidoProvider } from './providers'
 
 function unbindable(
@@ -53,6 +54,7 @@ const App = props => {
         <Routes>
           <Route path="/" component={Home}/>
           <Route path="/key" component={Key}/>
+          <Route path="/rhythm" component={Rhythm}/>
         </Routes>
       </div>
       </solsido>

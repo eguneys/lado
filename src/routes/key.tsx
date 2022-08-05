@@ -4,6 +4,7 @@ import g from '../music/glyphs'
 import { read, write, owrite } from '../play'
 import { useSolsido } from '../providers'
 import Sol_Key from '../sol_key'
+import { _VStaff } from './util'
 
 let $time_min, $time_no, $order_random, $order_sorted, $nb_all, $nb_sharps, $nb_flats
 
@@ -194,28 +195,6 @@ const KeySignatures = props => {
      }</For>
      </div>
   </>)
-}
-
-const _VStaff = props => {
-  
-  let $ref
-
-  onMount(() => {
-    let api = VStaff($ref)
-    createEffect(() => {
-      api.bras = props.bras
-    })
-
-    createEffect(() => {
-      api.xwi = props.xwi || ''
-    })
-
-    createEffect(() => {
-        api.playback = props.playback 
-     })
-    })
-
-  return (<div ref={$ref}></div>)
 }
 
 const CMajorExercise = props => {
