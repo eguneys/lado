@@ -26,7 +26,7 @@ a {
 
 #topnav a {
   color: #020202;
-  padding: 0.7em 0;
+  padding: 0.7em 0.7em;
   font-size: 1.2em;
   padding-left: 1.2rem;
   font-weight: bold;
@@ -105,7 +105,7 @@ main {
 
 #topnav {
   display: flex;
-  flex-flow: row wrap;
+  flex-flow: column;
   position: fixed;
   top: var(--site-header-height);
   bottom: 0;
@@ -145,4 +145,8 @@ main {
   right: 0;
   background: rgba(0, 0, 0, 0.6);
   z-index: 109;
+}
+
+#topnav section a.active {
+  text-decoration: underline;
 }

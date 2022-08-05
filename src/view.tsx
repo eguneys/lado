@@ -1,5 +1,5 @@
 import { createEffect, onCleanup, lazy } from 'solid-js'
-import { useLocation, Router, Routes, Route, Link } from '@solidjs/router'
+import { useLocation, Router, Routes, Route, Link, NavLink } from '@solidjs/router'
 import { Home } from './routes/home'
 import { Key } from './routes/key'
 import { useSolsido, SolsidoProvider } from './providers'
@@ -41,8 +41,8 @@ const App = props => {
         <label for="tn-tg" class="hbg"> <span class="hbg_in"></span></label>
         <nav id="topnav">
           <section><Link href="/"> lasolsido.org </Link></section>
-          <section> <Link href="/rhythm"> Rhythm </Link> </section>
-          <section> <Link href="/key"> Key Signatures </Link> </section>
+          <section> <NavLink href="/rhythm"> Rhythm </NavLink> </section>
+          <section> <NavLink href="/key"> Key Signatures </NavLink> </section>
           
         </nav>
       </header>
