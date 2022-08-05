@@ -1,0 +1,148 @@
+p,
+h3,
+h4{
+  margin: 0;
+}
+
+p {
+  margin-bottom: 1em;
+}
+
+@font-face {
+  font-family: 'BravuraText';
+  font-display: block;
+  src: url(assets/BravuraText.woff2) format("woff2"),
+  url(assets/BravuraText.woff) format("woff");
+}
+
+body {
+  --site-header-height: 60px;
+}
+
+a {
+  color: lightblue;
+  text-decoration: none;
+}
+
+#topnav a {
+  color: #020202;
+  padding: 0.7em 0;
+  font-size: 1.2em;
+  padding-left: 1.2rem;
+  font-weight: bold;
+  display: block;
+}
+
+#topnav {
+  z-index: 110;
+}
+
+#main-wrap {
+  --main-max-width: 1400px;
+  --main-margin: 1vw;
+}
+
+
+header {
+  height: var(--site-header-height);
+}
+
+#main-wrap {
+  display: grid;
+  grid-template-areas: '. . main . .';
+  grid-template-columns: var(--main-margin) 1fr minmax(auto, var(--main-max-width)) 1fr var(--main-margin);
+  margin-top: 0;
+}
+
+main {
+  grid-area: main;
+  display: flex;
+  flex-flow: column;
+}
+
+.hbg {
+  position: absolute;
+  top: 0;
+  left: 0;
+  width: var(--site-header-height);
+  height: var(--site-header-height);
+  cursor: pointer;
+}
+
+.hbg_in {
+  display: block;
+  position: absolute;
+  top: 50%;
+  left: 13px;
+}
+
+.hbg_in, .hbg_in::before, .hbg_in::after {
+  width: 34px;
+  height: 3px;
+  background: white;
+  border-radius: 1px;
+}
+
+.hbg_in::before, .hbg_in::after {
+  content: '';
+  display: block;
+  margin-top: -1.5px;
+  position: absolute;
+  border-radius: 3px;
+}
+
+.hbg_in::before {
+  top: -9px;
+}
+
+.hbg_in::after {
+  bottom: -10px;
+}
+
+#topnav {
+  max-width: 40%;
+}
+
+#topnav {
+  display: flex;
+  flex-flow: row wrap;
+  position: fixed;
+  top: var(--site-header-height);
+  bottom: 0;
+  left: 0;
+  background: lightgray;
+  color: black;
+  transition: transform 200ms;
+  padding-bottom: 1.2rem;
+  overflow-y: auto;
+  transform: translateX(calc(-100% - 10px));
+}
+
+.topnav-toggle {
+  display: block;
+  position: absolute;
+  top: -99999px;
+  left: -99999px;
+}
+
+.fullscreen-toggle:checked ~ .fullscreen-mask {
+  display: block;
+}
+
+.fullscreen-mask {
+  display: none;
+}
+
+.topnav-toggle:checked ~ #topnav {
+  transform: translateX(0);
+}
+
+.fullscreen-mask {
+  position: fixed;
+  top: 0;
+  left: 0;
+  bottom: 0;
+  right: 0;
+  background: rgba(0, 0, 0, 0.6);
+  z-index: 109;
+}

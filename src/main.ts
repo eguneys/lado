@@ -1,5 +1,6 @@
 import '../assets/vstaff.css'
 import './index.css'
+import './site.css'
 import { render } from 'solid-js/web'
 
 import Solsido from './solsido'

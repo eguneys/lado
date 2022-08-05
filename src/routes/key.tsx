@@ -34,10 +34,10 @@ export const Key = props => {
 
   let solsido = useSolsido()
 
-  return (<>
+  return (<main>
       <KeyExercises exercises={solsido._exercises}/>
       <KeySignatures majors={solsido._majors} />
-      </>)
+      </main>)
 }
 
 const KeyExercises = props => {

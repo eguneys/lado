@@ -1,21 +1,3 @@
-p,
-h3,
-h4{
-  margin: 0;
-}
-
-p {
-  margin-bottom: 1em;
-}
-
-@font-face {
-  font-family: 'BravuraText';
-  font-display: block;
-  src: url(assets/BravuraText.woff2) format("woff2"),
-  url(assets/BravuraText.woff) format("woff");
-}
-
-
 span.icon {
   display: flex;
   flex-flow: column;
