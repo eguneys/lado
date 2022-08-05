@@ -44,7 +44,7 @@ const KeyExercises = props => {
   return (<>
    
     <h2> Major Key Exercise </h2>
-    <Show when={console.log(props.exercises.explanations)||props.exercises.explanations}>
+    <Show when={props.exercises.explanations}>
 
     <KeyExerciseExplanation/>
     </Show>
@@ -75,14 +75,13 @@ const KeyExerciseExplanation = props => {
  
        <p> Also, play and practice individual scales at where they are listed below.  </p>
 
-       <p>Try these extra challenges:
+       <p>Try these extra challenges:</p>
        <ul>
         <li>Spot the patterns that emerge from sharp side, and flat side.</li>
        <li>Play with five fingers with the fingering techniques.</li>
        <li>Say the notes as you play them.</li>
        <li>Play without looking at the piano.</li>
        </ul>
-       </p>
 
      </div>
    </>)

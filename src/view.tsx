@@ -1,7 +1,7 @@
 import { onCleanup, lazy } from 'solid-js'
 import { Router, Routes, Route } from '@solidjs/router'
 import { Home } from './routes/home'
-const Key = lazy(() => import('./routes/key'))
+import { Key } from './routes/key'
 import { useSolsido, SolsidoProvider } from './providers'
 
 function unbindable(

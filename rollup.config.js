@@ -23,7 +23,7 @@ export default args => {
   return {
     input: 'src/main.ts',
     output: {
-      format: 'esm',
+      format: 'iife',
       name: 'Lado',
       dir: 'dist',
       ...(prod ? {
@@ -51,7 +51,7 @@ export default args => {
       htmlTemplate({
         template: 'src/index.html',
         target: 'index.html',
-        attrs: [`type="module"`],
+        /*attrs: [`type="module"`],*/
         /* https://github.com/bengsfort/rollup-plugin-generate-html-template/issues/12 */
         //prefix: '/'
       }),
