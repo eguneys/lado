@@ -2,6 +2,7 @@ import { createEffect, createMemo, createSignal } from 'solid-js'
 import { read, write, owrite } from './play'
 import { Solsido } from './solsido'
 import { make_playback } from './make_playback'
+import { make_player } from './make_player'
 
 export default class Sol_Rhythm {
 
@@ -22,6 +23,7 @@ const make_exercises = (rhythm: Sol_Rhythm) => {
 }
 
 const make_yardstick = (rhythm: SolRhythm) => {
+  let { solsido } = rhythm
 
   let _nb_beats = createSignal(4)
 
@@ -29,6 +31,11 @@ const make_yardstick = (rhythm: SolRhythm) => {
 
   _playback.playing = true
   _playback.bpm.bpm = 120
+
+  let m_osc_player = createMemo(() => solsido.osc_player)
+
+  let _player = make_player(m_osc_player, _playback, ['C4@0,1', 'D#@1,1'])
+
   let m_x = createMemo(() => {
     let [sub, ms, sub_i, subs] = _playback.bpm?.beat_ms
 

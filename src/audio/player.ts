@@ -1,5 +1,11 @@
 
 export abstract class HasAudioAnalyser {
+
+  _set_data(data: any) {
+    this.data = data
+    return this
+  }
+
   _out_gain?: GainNode
 
   get maxFilterFreq(): number {

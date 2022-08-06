@@ -1,4 +1,5 @@
 import { HasAudioAnalyser } from './player'
+import { ads, r } from './adsr'
 
 function load_audio(src: string) {
   return fetch(src).then(_ => _.arrayBuffer())
@@ -8,39 +9,13 @@ function decode_audio(context: AudioContext, buffer: ArrayBuffer) {
   return context.decodeAudioData(buffer)
 }
 
-function ads(param: AudioParam, now: number, { a,d,s,r }: Adsr, start: number, max: number) {
-  param.setValueAtTime(start, now)
-  param.linearRampToValueAtTime(max, now + a)
-  param.linearRampToValueAtTime(s, now + a + d)
-
-  /* not needed ? */
-  //param.setValueAtTime(s, now + a + d)
-}
-
-function r(param: AudioParam, now: number, { s, r }: Adsr, min: number) {
-  param.cancelAndHoldAtTime(now)
-  /* https://stackoverflow.com/questions/73175007/crack-sounds-if-i-dont-release-immediately-like-wait-for-a-settimeout/73207368#73207368 */
-  param.setValueAtTime(s, now)
-  param.linearRampToValueAtTime(min, now + (r || 0))
-}
-
 export class SamplesPlayer {
 
-  _context?: AudioContext
-
-  get context(): AudioContext {
-    if (!this._context) {
-      this._context = new AudioContext()
-    }
-    return this._context
-  }
-
+  constructor(readonly context: AudioContext) {}
 
   get currentTime(): number {
     return this.context.currentTime
   }
-
-
 
   _buffers!: Map<Note, AudioBuffer>
 
@@ -58,7 +33,7 @@ export class SamplesPlayer {
     this._buffers = new Map(buffers)
   }
 
-  _ps = new Map<Note, SamplePlayer>
+  _ps = new Map<Note, SamplePlayer>()
 
   attack(synth: Synth, note: Note, now: number = this.context.currentTime) {
     let buffer = this._buffers.get(note)
@@ -81,11 +56,6 @@ export class SamplesPlayer {
 
 
 class SamplePlayer extends HasAudioAnalyser {
-
-  _set_data(data: any) {
-    this.data = data
-    return this
-  }
 
   constructor(context: AudioContext, readonly buffer: AudioBuffer) {
     super(context)

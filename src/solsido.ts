@@ -6,6 +6,16 @@ import { make_ref } from './make_sticky'
 import { useLocation } from '@solidjs/router'
 import { read, write, owrite } from './play'
 
+const has_context = (() => {
+  let _
+  () => {
+    if (!_) {
+      _ = new AudioContext()
+    }
+    return _
+  }
+})()
+
 const getPlayerController = async (input: boolean) => {
   if (input) {
 
@@ -13,12 +23,22 @@ const getPlayerController = async (input: boolean) => {
 
     short_range_flat_notes.forEach(n => srcs[n] = `${n}.mp3`)
 
-    let p = new SamplesPlayer()
+    let p = new SamplesPlayer(has_context.context)
     await p.init({
       srcs,
       base_url: 'assets/audio/'
     })
     return p
+  }
+}
+
+
+const getOscPlayers = async (input: boolean) => {
+  if (input) {
+
+    let o = new OscPlayers(has_context.context)
+    await o.init()
+    return o
   }
 }
 
@@ -38,14 +58,17 @@ export default class Solsido {
     owrite(this._user_click, true)
   }
 
-  get component() {
-    return this.m_component()
+  get osc_player() {
+    return read(this.r_opc)
   }
 
   constructor() {
 
     this._user_click = createSignal(false)
     this.r_pc = createResource(this._user_click[0], getPlayerController)
+
+    this.r_opc = createResource(this._user_click[0], getOscPlayers)
+
     this.ref = make_ref()
   }
 
