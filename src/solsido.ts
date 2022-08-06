@@ -1,5 +1,5 @@
 import { createMemo, createSignal, createResource } from 'solid-js'
-import { SamplesPlayer } from './audio'
+import { OscPlayers, SamplesPlayer } from './audio'
 import { short_range_flat_notes, fuzzy_note } from './audio'
 
 import { make_ref } from './make_sticky'
@@ -8,11 +8,13 @@ import { read, write, owrite } from './play'
 
 const has_context = (() => {
   let _
-  () => {
-    if (!_) {
-      _ = new AudioContext()
+  return {
+    get context() {
+      if (!_) {
+        _ = new AudioContext()
+      }
+      return _
     }
-    return _
   }
 })()
 
@@ -64,7 +66,7 @@ export default class Solsido {
 
   constructor() {
 
-    this._user_click = createSignal(false)
+    this._user_click = createSignal(true)
     this.r_pc = createResource(this._user_click[0], getPlayerController)
 
     this.r_opc = createResource(this._user_click[0], getOscPlayers)

@@ -3,7 +3,6 @@ export function ads(param: AudioParam, now: number, { a,d,s,r }: Adsr, start: nu
   param.setValueAtTime(start, now)
   param.linearRampToValueAtTime(max, now + a)
   param.linearRampToValueAtTime(s, now + a + d)
-
   /* not needed ? */
   //param.setValueAtTime(s, now + a + d)
 }

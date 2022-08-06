@@ -34,7 +34,27 @@ const make_yardstick = (rhythm: SolRhythm) => {
 
   let m_osc_player = createMemo(() => solsido.osc_player)
 
-  let _player = make_player(m_osc_player, _playback, ['C4@0,1', 'D#@1,1'])
+  let _m_up_player = make_player(m_osc_player, _playback, ['C4@0,2'])
+  let _m_down_player = make_player(m_osc_player, _playback, ['D#@4,2', 'D#@8,2', 'D#@12,2'])
+
+  _m_up_player.synth = {
+    wave: 'sine', 
+    volume: 1, 
+    cutoff: 0.3, 
+    cutoff_max: 0.2, 
+    amplitude: 1, 
+    filter_adsr: { a: 0, d: 0.03, s: 0.5, r: 0 }, 
+    amp_adsr: { a: 0.01, d: 0.02, s: 0, r: 0 }
+  }
+  _m_down_player.synth = {
+    wave: 'sine', 
+    volume: 1, 
+    cutoff: 0.2, 
+    cutoff_max: 0.4, 
+    amplitude: 1, 
+    filter_adsr: { a: 0.02, d: 0.02, s: 0, r: 0 }, 
+    amp_adsr: { a: 0.01, d: 0.01, s: 0, r: 0.02 }
+  }
 
   let m_x = createMemo(() => {
     let [sub, ms, sub_i, subs] = _playback.bpm?.beat_ms

@@ -22,7 +22,6 @@ export class OscPlayers {
     let freq = 440
 
     let p = new OscPlayer(this.context, freq)._set_data({synth})
-
     p.attack(now)
 
     this._ps.set(note, p)
@@ -48,11 +47,13 @@ class OscPlayer extends HasAudioAnalyser {
   }
 
   _attack(now: number = this.context.currentTime) {
-    let { context, buffer } = this
+    let { context, maxFilterFreq } = this
 
-    let { freq } = this
+    let { _out_gain, freq } = this
 
-    let { wave, volume, cutoff, cutoff_max, amplitude, filter_adsr, amp_adsr } = this.data
+    let { synth } = this.data
+
+    let { wave, volume, cutoff, cutoff_max, amplitude, filter_adsr, amp_adsr } = synth
 
     let osc1 = getOscillator(context, wave, 15)
     this.osc1 = osc1
@@ -60,20 +61,22 @@ class OscPlayer extends HasAudioAnalyser {
     this.osc2 = osc2
 
 
-    let source_mix = context.createGain()
-    this.source_mix = source_mix
+    let osc1_mix = context.createGain()
+    let osc2_mix = context.createGain()
 
-    osc1.connect(source_mix)
-    osc2.connect(source_mix)
+    osc1.connect(osc1_mix)
+    osc2.connect(osc2_mix)
 
-    source_mix.gain.setValueAtTime(0.5, now)
+    osc1_mix.gain.setValueAtTime(0.5, now)
+    osc2_mix.gain.setValueAtTime(0.5, now)
 
     let filter = new BiquadFilterNode(context, { type: 'lowpass', Q: 6 })
     this.filter = filter
 
-    source_mix.connect(filter)
+    osc1_mix.connect(filter)
+    osc2_mix.connect(filter)
 
-    out_gain.gain.setValueAtTime(volume, now)
+    _out_gain.gain.setValueAtTime(volume, now)
 
     osc1.frequency.setValueAtTime(freq, now)
     osc2.frequency.setValueAtTime(freq, now)
@@ -81,7 +84,7 @@ class OscPlayer extends HasAudioAnalyser {
     let envelope = new GainNode(context)
     this.envelope = envelope
     filter.connect(envelope)
-    envelope.connect(out_gain)
+    envelope.connect(_out_gain)
 
 
     let _filter_adsr = { ...filter_adsr, 
@@ -106,14 +109,15 @@ class OscPlayer extends HasAudioAnalyser {
   _release(now: number = this.context.currentTime) {
     let { context, buffer } = this
 
-    let { filter_adsr, amp_adsr } = this.data
+    let { synth: { cutoff, filter_adsr, amp_adsr } } = this.data
 
-    r(this.source_mix.gain, now, amp_adsr, 0)
+    r(this.envelope.gain, now, amp_adsr, 0)
     r(this.filter.frequency,
       now,
       filter_adsr,
       cutoff * this.maxFilterFreq * 0.4)
 
+      let { a, r: _r } = amp_adsr
       this.osc1.stop(now + a + _r)
       this.osc2.stop(now + a + _r)
   }
