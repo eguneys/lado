@@ -21,6 +21,9 @@ export const Rhythm = props => {
 const RExercises = props => {
   return (<div class='rhythm-exercises'>
     <h2> Yardstick Exercise </h2>
+    <div class='yardstick-controls'>
+      <Metronome bpm={props.exercises.yardstick.bpm} set_bpm={_ => props.exercises.yardstick.bpm = _}/>
+    </div>
     <div class="yardstick-wrap">
       <Yardstick yardstick={props.exercises.yardstick} />
     </div>
@@ -32,6 +35,25 @@ const RExercises = props => {
 </div>)
 }
 
+const Metronome = props => {
+  
+  return (<metronome>
+      <span class='icon'>play</span>
+      <label>bpm</label>
+      <UpDownControl value={props.bpm} setValue={_ => props.set_bpm(_)}/>
+    </metronome>)
+}
+
+const dformat = v => v < 10 ? `0${v}` : `${v}`
+const UpDownControl = props => {
+  const value = (value: number) => {
+    props.setValue(value)
+  }
+
+  return (<div class='up-down'>
+      <span onClick={_ => value(-1) } class='value-down'>{"<"}</span><span onClick={_ => value(+1) } class='value'> {dformat(props.value)} </span> <span onClick={_ => value(+1) } class='value-up'>{">"}</span>
+      </div>)
+}
 
 const Yardstick = props => {
 

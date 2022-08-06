@@ -15,7 +15,7 @@ export const make_playback = (m_notes: Memo<NoteMs>) => {
   })
 
   createEffect(() => {
-    let __ = m_bpm().beat_ms
+    let __ = m_bpm()?.beat_ms
     if (__) {
       let [sub, ms, i_sub, subs] = __
 
@@ -27,12 +27,17 @@ export const make_playback = (m_notes: Memo<NoteMs>) => {
   })
 
   return {
-
     get on_sub() {
       return read(_trigger)
     },
     get bpm() {
       return m_bpm()
+    },
+    set bpm(bpm: number) {
+      let _bpm = m_bpm()
+      if (_bpm) {
+        _bpm.bpm = bpm
+      }
     },
     set playing(v: boolean) {
       owrite(_playing, v)
@@ -74,6 +79,9 @@ export const make_bpm = (bpm: number = 120) => {
   })
 
   return {
+    get bpm() {
+      return read(_bpm)
+    },
     set bpm(bpm: number) {
       owrite(_bpm, Math.max(20, bpm))
     },

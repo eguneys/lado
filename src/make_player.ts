@@ -1,7 +1,7 @@
-import { createSignal, createEffect } from 'solid-js'
+import { onCleanup, createMemo, createSignal, createEffect } from 'solid-js'
 import { read, write, owrite } from './play'
 
-export const make_player = (m_player: Memo<PlayerController>, playback: Playback, notes: Array<NoteMs>) => {
+export const make_player = (m_player: Memo<PlayerController>, playback: Playback, m_notes: Memo<Array<NoteMs>>) => {
 
   let _synth = createSignal({ 
     wave: 'sawtooth', 
@@ -15,11 +15,11 @@ export const make_player = (m_player: Memo<PlayerController>, playback: Playback
 
   let _loop = createSignal([0, 16])
 
-  let _free = notes.map(_ => {
+  let m_free = createMemo(() => m_notes().map(_ => {
     let [note, d_sub] = _.split('@')
     let [at, sub] = d_sub.split(',')
     return [note, parseInt(at), parseInt(sub), -1]
-  })
+  }))
 
   createEffect(() => {
     let { on_sub } = playback
@@ -30,7 +30,7 @@ export const make_player = (m_player: Memo<PlayerController>, playback: Playback
 
       let sub = _sub % _loop_range + _loop_begin
 
-      let _in = _free.filter(_ => _[1] === sub && _[3] !== _sub)
+      let _in = m_free().filter(_ => _[1] === sub && _[3] !== _sub)
 
       let player = m_player()
       if (player) {
@@ -46,6 +46,9 @@ export const make_player = (m_player: Memo<PlayerController>, playback: Playback
   })
 
   return {
+    set loop(loop: [number, number]) {
+      owrite(_loop, loop)
+    },
     set synth(synth: Synth) {
       owrite(_synth, synth)
     }

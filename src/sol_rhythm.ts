@@ -1,8 +1,10 @@
-import { createEffect, createMemo, createSignal } from 'solid-js'
+import { on, createEffect, createMemo, createSignal } from 'solid-js'
 import { read, write, owrite } from './play'
 import { Solsido } from './solsido'
 import { make_playback } from './make_playback'
 import { make_player } from './make_player'
+
+let bpms = [20, 30, 60, 90, 120, 180, 200, 400]
 
 export default class Sol_Rhythm {
 
@@ -28,14 +30,21 @@ const make_yardstick = (rhythm: SolRhythm) => {
   let _nb_beats = createSignal(4)
 
   let _playback = make_playback()
-
   _playback.playing = true
-  _playback.bpm.bpm = 120
 
   let m_osc_player = createMemo(() => solsido.osc_player)
 
-  let _m_up_player = make_player(m_osc_player, _playback, ['C4@0,2'])
-  let _m_down_player = make_player(m_osc_player, _playback, ['D#@4,2', 'D#@8,2', 'D#@12,2'])
+  let m_up_notes = createMemo(() => ['C4@0,2'])
+  let m_down_notes = createMemo(() => ['D#@4,2', 'D#@8,2', 'D#@12,2'])
+
+  let _m_up_player = make_player(m_osc_player, _playback, m_up_notes)
+  let _m_down_player = make_player(m_osc_player, _playback, m_down_notes)
+
+  createEffect(() => {
+    let beats = read(_nb_beats)
+    _m_up_player.loop = [0, beats * 4]
+    _m_down_player.loop = [0, beats * 4]
+  })
 
   _m_up_player.synth = {
     wave: 'sine', 
@@ -57,10 +66,14 @@ const make_yardstick = (rhythm: SolRhythm) => {
   }
 
   let m_x = createMemo(() => {
-    let [sub, ms, sub_i, subs] = _playback.bpm?.beat_ms
+    let beat_ms = _playback.bpm?.beat_ms
 
-    let beat = (sub + sub_i) / subs
-    return beat
+    if (beat_ms) {
+      let [sub, ms, sub_i, subs] = beat_ms
+
+      let beat = (sub + sub_i) / subs
+      return beat
+    }
   })
 
   /*
@@ -102,6 +115,15 @@ const make_yardstick = (rhythm: SolRhythm) => {
     get cursor2_style() { return m_cursor2_style() },
     get beats() {
       return _beats
+    },
+    get bpm() {
+      return _playback.bpm.bpm
+    },
+    set bpm(value: number) {
+      let _bpm = bpms.indexOf(_playback.bpm.bpm) + value + bpms.length
+      _bpm = Math.max(0, _bpm) % bpms.length
+
+      _playback.bpm = bpms[_bpm]
     }
   }
 }
