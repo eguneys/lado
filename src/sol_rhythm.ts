@@ -34,8 +34,8 @@ const make_yardstick = (rhythm: SolRhythm) => {
 
   let m_osc_player = createMemo(() => solsido.osc_player)
 
-  let m_up_notes = createMemo(() => ['C4@0,2'])
-  let m_down_notes = createMemo(() => ['D#@4,2', 'D#@8,2', 'D#@12,2'])
+  let m_up_notes = createMemo(() => ['D5@0,2'])
+  let m_down_notes = createMemo(() => ['F4@4,2', 'A4@8,2', 'F4@12,2'])
 
   let _m_up_player = make_player(m_osc_player, _playback, m_up_notes)
   let _m_down_player = make_player(m_osc_player, _playback, m_down_notes)

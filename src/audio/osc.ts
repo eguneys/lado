@@ -1,5 +1,6 @@
 import { HasAudioAnalyser } from './player'
 import { ads, r } from './adsr'
+import { note_freq } from './tonal'
 
 
 export class OscPlayers {
@@ -18,10 +19,7 @@ export class OscPlayers {
   _ps = new Map<Note, OscPlayer>()
 
   attack(synth: Synth, note: Note, now: number = this.context.currentTime) {
-
-    let freq = 440
-
-    let p = new OscPlayer(this.context, freq)._set_data({synth})
+    let p = new OscPlayer(this.context, note_freq(note))._set_data({synth})
     p.attack(now)
 
     this._ps.set(note, p)

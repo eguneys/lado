@@ -13,6 +13,7 @@ export const fuzzy_note = _ => {
 }
 
 export const get_note = _ => Note.get(_)
+export const note_freq = _ => Note.get(_).freq
 
 export const enharmonic = _ => Note.enharmonic(_)
 
