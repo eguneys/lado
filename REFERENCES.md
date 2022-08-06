@@ -1,4 +1,6 @@
+
 Rhythm reference: [Yardstick method](https://www.youtube.com/watch?v=8Sw_trDFJw8)
+[Upbeat Downbeat](https://en.wikipedia.org/wiki/Beat_(music)#Downbeat).
 
 Articulation reference: [https://music.stackexchange.com/questions/90678/for-piano-scales-should-i-let-go-of-the-previous-key-before-i-hit-the-next-one](https://music.stackexchange.com/questions/90678/for-piano-scales-should-i-let-go-of-the-previous-key-before-i-hit-the-next-one)
 

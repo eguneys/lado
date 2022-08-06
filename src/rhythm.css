@@ -2,3 +2,67 @@
   position: relative;
   aspect-ratio: 13/4;
 }
+
+.yardstick-wrap {
+  position: relative;
+  aspect-ratio: 13/4;
+}
+
+yardstick {
+  overflow: hidden;
+  position: absolute;
+  width: 100%;
+  height: 100%;
+  background: white;
+}
+
+yardstick sticks, 
+yardstick playback {
+  position: absolute;
+  width: 100%;
+  height: 100%;
+}
+
+yardstick playback cursor {
+  position: absolute;
+  height: 100%;
+  width: calc(100% / (48 * 4 + 1));
+  background: yellow;
+}
+
+yardstick sticks {
+  display: flex;
+  align-items: flex-end;
+}
+
+yardstick stick {
+  position: relative;
+  flex: 1;
+  height: 90%;
+}
+
+yardstick stick:before {
+  position: absolute;
+  bottom: 0;
+  width: 100%;
+  height: 10%;
+  opacity: 0.1;
+  background: black;
+  content: '';
+  transition: all 500ms;
+}
+
+yardstick stick.strong:before {
+  height: 100%;
+  opacity: 1;
+}
+
+yardstick stick.medium:before {
+  height: 75%;
+  opacity: 1;
+}
+
+yardstick stick.weak:before {
+  height: 50%;
+  opacity: 1;
+}

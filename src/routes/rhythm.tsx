@@ -22,7 +22,7 @@ const RExercises = props => {
   return (<div class='rhythm-exercises'>
     <h2> Yardstick Exercise </h2>
     <div class="yardstick-wrap">
-      <Yardstick beats={props.exercises.yardstick} />
+      <Yardstick yardstick={props.exercises.yardstick} />
     </div>
 
     <h2> Notes Exercise </h2>
@@ -37,11 +37,15 @@ const Yardstick = props => {
 
   return (<>
     <yardstick>
-      <For each={props.beats}>{beat =>
-        <For each={beat.divisions}>{ sub =>
-          <stick/>
-        }</For>
+      <playback>
+        <cursor style={props.yardstick.cursor1_style}/>
+        <cursor style={props.yardstick.cursor2_style}/>
+      </playback>
+      <sticks>
+      <For each={props.yardstick.beats}>{beat =>
+         <stick class={beat.klass}/>
       }</For>
+      </sticks>
     </yardstick>
       </>)
 }
