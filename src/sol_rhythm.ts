@@ -30,9 +30,10 @@ const make_yardstick = (rhythm: SolRhythm) => {
   _playback.playing = true
   _playback.bpm.bpm = 120
   let m_x = createMemo(() => {
-    let [beat, ms, i] = _playback.bpm?.beat_ms
+    let [sub, ms, sub_i, subs] = _playback.bpm?.beat_ms
 
-    return beat + i
+    let beat = (sub + sub_i) / subs
+    return beat
   })
 
   /*
