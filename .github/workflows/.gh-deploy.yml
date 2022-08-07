@@ -17,6 +17,7 @@ jobs:
           ./linkstaff.sh
           yarn link vstaff
           yarn build:examples
+          ./hack_gh_page_routes.sh
 
       - name: Deploy 🚀
         uses: JamesIves/github-pages-deploy-action@v4.2.5

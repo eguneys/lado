@@ -1,7 +1,6 @@
 import { nodeResolve } from '@rollup/plugin-node-resolve'
 import commonjs from '@rollup/plugin-commonjs'
 
-//import typescript from '@rollup/plugin-typescript'
 import babel from '@rollup/plugin-babel'
 import css from 'rollup-plugin-import-css'
 import copy from 'rollup-plugin-copy'
@@ -14,6 +13,8 @@ import { string } from 'rollup-plugin-string'
 
 import replace from '@rollup/plugin-replace'
 import packageJson from './package.json'
+
+import { terser } from 'rollup-plugin-terser'
 
 let extensions = ['.ts', '.tsx']
 
@@ -28,6 +29,7 @@ export default args => {
       dir: 'dist',
       ...(prod ? {
        // format: 'es'
+        plugins: [terser()]
       } : { sourcemap: true })
     },
     watch: {
