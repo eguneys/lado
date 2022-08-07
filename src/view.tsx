@@ -52,9 +52,9 @@ const App = props => {
       </header>
       <div id='main-wrap'>
         <Routes>
-          <Route path="/" component={Home}/>
-          <Route path="/key" component={Key}/>
-          <Route path="/rhythm" component={Rhythm}/>
+          <Route path="" component={Home}/>
+          <Route path="key" component={Key}/>
+          <Route path="rhythm" component={Rhythm}/>
         </Routes>
       </div>
       </solsido>
