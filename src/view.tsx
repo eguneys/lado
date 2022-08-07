@@ -4,6 +4,7 @@ import { Home } from './routes/home'
 import { Key } from './routes/key'
 import { Rhythm } from './routes/rhythm'
 import { useSolsido, SolsidoProvider } from './providers'
+import { hashIntegration } from '@solidjs/router'
 
 function unbindable(
   el: EventTarget,
@@ -63,7 +64,7 @@ const App = props => {
 
 export const AppWithRouter = options => props => {
   return (
-    <Router>
+    <Router source={hashIntegration()}>
     <SolsidoProvider options={options}>
       <App/>
       </SolsidoProvider>
