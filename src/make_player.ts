@@ -33,10 +33,12 @@ export const make_player = (m_player: Memo<PlayerController>, playback: Playback
       let _in = m_free().filter(_ => _[1] === sub && _[3] !== _sub)
 
       let player = m_player()
-      if (player) {
+      let { bpm } = playback
+
+      if (player && bpm) {
         _in.forEach(_ => {
           let [note, __, dur_subs] = _
-          let duration = dur_subs * playback.bpm.ms_per_sub
+          let duration = dur_subs * bpm.ms_per_sub
           player.attack(read(_synth), note, player.currentTime - ms / 1000)
           player.release(note, player.currentTime + (- ms + duration) / 1000)
           _[3] = _sub

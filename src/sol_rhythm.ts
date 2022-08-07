@@ -29,14 +29,22 @@ const make_yardstick = (rhythm: SolRhythm) => {
   let { solsido } = rhythm
 
   let _nb_beats = createSignal(4)
+  let m_nb_beats = createMemo(() => read(_nb_beats))
 
-  let _playback = make_playback()
-  _playback.playing = true
+  let _playback = make_playback(m_nb_beats)
 
   let m_osc_player = createMemo(() => solsido.osc_player)
 
-  let m_up_notes = createMemo(() => ['D5@0,2'])
-  let m_down_notes = createMemo(() => ['F4@4,2', 'A4@8,2', 'F4@12,2'])
+  let m_up_notes = createMemo(() => {
+    _playback.playing
+    _playback.bpm
+    return ['D5@-16,2', 'D5@0,2']
+  })
+  let m_down_notes = createMemo(() => {
+    _playback.playing
+    _playback.bpm
+    return ['F4@-12,2', 'A4@-8,2', 'F4@-4,2', 'F4@4,2', 'A4@8,2', 'F4@12,2']
+  })
 
   let _m_up_player = make_player(m_osc_player, _playback, m_up_notes)
   let _m_down_player = make_player(m_osc_player, _playback, m_down_notes)
@@ -71,7 +79,6 @@ const make_yardstick = (rhythm: SolRhythm) => {
 
     if (beat_ms) {
       let [sub, ms, sub_i, subs] = beat_ms
-
       let beat = (sub + sub_i) / subs
       return beat
     }
@@ -88,6 +95,9 @@ const make_yardstick = (rhythm: SolRhythm) => {
    4 1
   */
   let m_cursor1_x = createMemo(() => {
+    if (m_x() < 0) {
+      return -10
+    }
     let nb_beats = read(_nb_beats)
     let half = nb_beats / 2
     return ((m_x() - half) % nb_beats + half) /nb_beats
@@ -110,6 +120,10 @@ const make_yardstick = (rhythm: SolRhythm) => {
     left: `${m_cursor2_x() * 48 * 100/49}%`
   }))
 
+  let m_bpm = createMemo((prev) =>
+    _playback.bpm?.bpm || prev
+  )
+
 
   return {
     get cursor1_style() { return m_cursor1_style() },
@@ -127,13 +141,23 @@ const make_yardstick = (rhythm: SolRhythm) => {
       return _beats
     },
     get bpm() {
-      return _playback.bpm.bpm
+      return m_bpm()
     },
     set bpm(value: number) {
+      if (!_playback.bpm) {
+        return 
+      }
       let _bpm = bpms.indexOf(_playback.bpm.bpm) + value + bpms.length
       _bpm = Math.max(0, _bpm) % bpms.length
 
       _playback.bpm = bpms[_bpm]
+    },
+    get playback_playing() {
+      return _playback.playing ? 'stop': 'play'
+    },
+    toggle_playback_playing() {
+      solsido.user_click()
+      _playback.playing = !_playback.playing
     }
   }
 }

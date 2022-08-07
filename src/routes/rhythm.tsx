@@ -23,7 +23,8 @@ const RExercises = props => {
     <h2> Yardstick Exercise </h2>
     <div class='yardstick-controls'>
       <Metronome 
-
+    toggle_play={() => props.exercises.yardstick.toggle_playback_playing()}
+    play_mode={props.exercises.yardstick.playback_playing}
     beats={props.exercises.yardstick.nb_beats} 
     set_beats={_ => props.exercises.yardstick.nb_beats = _}
     bpm={props.exercises.yardstick.bpm} 
@@ -43,7 +44,7 @@ const RExercises = props => {
 const Metronome = props => {
   
   return (<metronome>
-      <span class='icon'>play</span>
+    <span onClick={props.toggle_play} class='icon'>{props.play_mode}</span>
     <group>
       <label>bpm</label>
       <UpDownControl value={props.bpm} setValue={_ => props.set_bpm(_)}/>

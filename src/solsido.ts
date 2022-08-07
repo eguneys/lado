@@ -66,7 +66,7 @@ export default class Solsido {
 
   constructor() {
 
-    this._user_click = createSignal(true)
+    this._user_click = createSignal(false)
     this.r_pc = createResource(this._user_click[0], getPlayerController)
 
     this.r_opc = createResource(this._user_click[0], getOscPlayers)

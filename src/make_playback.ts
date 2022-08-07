@@ -3,32 +3,29 @@ import { read, write, owrite, loop } from './play'
 
 
 
-export const make_playback = (m_notes: Memo<NoteMs>) => {
+export const make_playback = (m_nb_beats: Memo<number>, m_notes: Memo<NoteMs>) => {
 
-  let _trigger = createSignal(undefined, { equals: false })
   let _playing = createSignal(false)
 
   let m_bpm = createMemo(() => {
     if (read(_playing)) {
-      return make_bpm(120)
+      return make_bpm(m_nb_beats(), 120)
     }
   })
 
-  createEffect(() => {
+  let m_trigger = createMemo(() => {
     let __ = m_bpm()?.beat_ms
     if (__) {
       let [sub, ms, i_sub, subs] = __
-
       if (i_sub < 0) {
-        owrite(_trigger, __)
-      } else {
-      }
+        return __
+      } 
     }
   })
 
   return {
     get on_sub() {
-      return read(_trigger)
+      return m_trigger()
     },
     get bpm() {
       return m_bpm()
@@ -48,7 +45,7 @@ export const make_playback = (m_notes: Memo<NoteMs>) => {
   }
 }
 
-export const make_bpm = (bpm: number = 120) => {
+export const make_bpm = (nb_beats: number, bpm: number = 120) => {
   let _bpm = createSignal(bpm)
   let _ms_per_beat = createMemo(() => 60000 / read(_bpm))
 
@@ -56,7 +53,7 @@ export const make_bpm = (bpm: number = 120) => {
 
   let _ms_per_sub = createMemo(() => read(_ms_per_beat) / read(_subs))
 
-  let _sub = createSignal(-3 * 4)
+  let _sub = createSignal(-4 * nb_beats - 1)
   let _lookahead_ms = 20
 
   let _t = createSignal(_lookahead_ms)
