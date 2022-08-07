@@ -22,6 +22,7 @@ var Lado = (function () {
     context: null,
     owner: null
   };
+  const [transPending, setTransPending] = /*@__PURE__*/createSignal$1(false);
   var Owner$1 = null;
   let Transition$1 = null;
   let Listener$1 = null;
@@ -264,6 +265,49 @@ var Lado = (function () {
     if (Owner$1 === null) ;else if (Owner$1.cleanups === null) Owner$1.cleanups = [fn];else Owner$1.cleanups.push(fn);
     return fn;
   }
+  function getOwner() {
+    return Owner$1;
+  }
+  function runWithOwner(o, fn) {
+    const prev = Owner$1;
+    Owner$1 = o;
+    try {
+      return runUpdates$1(fn, true);
+    } finally {
+      Owner$1 = prev;
+    }
+  }
+  function startTransition(fn) {
+    const l = Listener$1;
+    const o = Owner$1;
+    return Promise.resolve().then(() => {
+      Listener$1 = l;
+      Owner$1 = o;
+      let t;
+      batch$1(fn);
+      Listener$1 = Owner$1 = null;
+      return t ? t.done : undefined;
+    });
+  }
+  function useTransition() {
+    return [transPending, startTransition];
+  }
+  function createContext(defaultValue) {
+    const id = Symbol("context");
+    return {
+      id,
+      Provider: createProvider(id),
+      defaultValue
+    };
+  }
+  function useContext(context) {
+    let ctx;
+    return (ctx = lookup(Owner$1, context.id)) !== undefined ? ctx : context.defaultValue;
+  }
+  function children(fn) {
+    const children = createMemo$1(fn);
+    return createMemo$1(() => resolveChildren(children()));
+  }
   let SuspenseContext;
   function readSignal$1() {
     const runningTransition = Transition$1 ;
@@ -488,6 +532,33 @@ var Lado = (function () {
   function handleError$1(err) {
     throw err;
   }
+  function lookup(owner, key) {
+    return owner ? owner.context && owner.context[key] !== undefined ? owner.context[key] : lookup(owner.owner, key) : undefined;
+  }
+  function resolveChildren(children) {
+    if (typeof children === "function" && !children.length) return resolveChildren(children());
+    if (Array.isArray(children)) {
+      const results = [];
+      for (let i = 0; i < children.length; i++) {
+        const result = resolveChildren(children[i]);
+        Array.isArray(result) ? results.push.apply(results, result) : results.push(result);
+      }
+      return results;
+    }
+    return children;
+  }
+  function createProvider(id) {
+    return function provider(props) {
+      let res;
+      createComputed(() => res = untrack$1(() => {
+        Owner$1.context = {
+          [id]: props.value
+        };
+        return children(() => props.children);
+      }));
+      return res;
+    };
+  }
 
   const FALLBACK$1 = Symbol("fallback");
   function dispose$1(d) {
@@ -651,6 +722,37 @@ var Lado = (function () {
       }
     }, propTraps);
   }
+  function splitProps(props, ...keys) {
+    const blocked = new Set(keys.flat());
+    const descriptors = Object.getOwnPropertyDescriptors(props);
+    const res = keys.map(k => {
+      const clone = {};
+      for (let i = 0; i < k.length; i++) {
+        const key = k[i];
+        Object.defineProperty(clone, key, descriptors[key] ? descriptors[key] : {
+          get() {
+            return props[key];
+          },
+          set() {
+            return true;
+          }
+        });
+      }
+      return clone;
+    });
+    res.push(new Proxy({
+      get(property) {
+        return blocked.has(property) ? undefined : props[property];
+      },
+      has(property) {
+        return blocked.has(property) ? false : property in props;
+      },
+      keys() {
+        return Object.keys(props).filter(k => !blocked.has(k));
+      }
+    }, propTraps));
+    return res;
+  }
 
   function For$1(props) {
     const fallback = "fallback" in props && {
@@ -672,6 +774,27 @@ var Lado = (function () {
       return props.fallback;
     });
   }
+
+  const booleans = ["allowfullscreen", "async", "autofocus", "autoplay", "checked", "controls", "default", "disabled", "formnovalidate", "hidden", "indeterminate", "ismap", "loop", "multiple", "muted", "nomodule", "novalidate", "open", "playsinline", "readonly", "required", "reversed", "seamless", "selected"];
+  const Properties = /*#__PURE__*/new Set(["className", "value", "readOnly", "formNoValidate", "isMap", "noModule", "playsInline", ...booleans]);
+  const ChildProperties = /*#__PURE__*/new Set(["innerHTML", "textContent", "innerText", "children"]);
+  const Aliases = {
+    className: "class",
+    htmlFor: "for"
+  };
+  const PropAliases = {
+    class: "className",
+    formnovalidate: "formNoValidate",
+    ismap: "isMap",
+    nomodule: "noModule",
+    playsinline: "playsInline",
+    readonly: "readOnly"
+  };
+  const DelegatedEvents = /*#__PURE__*/new Set(["beforeinput", "click", "dblclick", "contextmenu", "focusin", "focusout", "input", "keydown", "keyup", "mousedown", "mousemove", "mouseout", "mouseover", "mouseup", "pointerdown", "pointermove", "pointerout", "pointerover", "pointerup", "touchend", "touchmove", "touchstart"]);
+  const SVGNamespace = {
+    xlink: "http://www.w3.org/1999/xlink",
+    xml: "http://www.w3.org/XML/1998/namespace"
+  };
 
   function memo(fn, equals) {
     return createMemo$1(fn, undefined, !equals ? {
@@ -768,6 +891,9 @@ var Lado = (function () {
   function setAttribute$1(node, name, value) {
     if (value == null) node.removeAttribute(name);else node.setAttribute(name, value);
   }
+  function setAttributeNS(node, namespace, name, value) {
+    if (value == null) node.removeAttributeNS(namespace, name);else node.setAttributeNS(namespace, name, value);
+  }
   function className$1(node, value) {
     if (value == null) node.removeAttribute("class");else node.className = value;
   }
@@ -782,10 +908,114 @@ var Lado = (function () {
       node.addEventListener(name, handler[0] = e => handlerFn.call(node, handler[1], e));
     } else node.addEventListener(name, handler);
   }
+  function classList(node, value, prev = {}) {
+    const classKeys = Object.keys(value || {}),
+          prevKeys = Object.keys(prev);
+    let i, len;
+    for (i = 0, len = prevKeys.length; i < len; i++) {
+      const key = prevKeys[i];
+      if (!key || key === "undefined" || value[key]) continue;
+      toggleClassKey(node, key, false);
+      delete prev[key];
+    }
+    for (i = 0, len = classKeys.length; i < len; i++) {
+      const key = classKeys[i],
+            classValue = !!value[key];
+      if (!key || key === "undefined" || prev[key] === classValue || !classValue) continue;
+      toggleClassKey(node, key, true);
+      prev[key] = classValue;
+    }
+    return prev;
+  }
+  function style$1(node, value, prev = {}) {
+    const nodeStyle = node.style;
+    const prevString = typeof prev === "string";
+    if (value == null && prevString || typeof value === "string") return nodeStyle.cssText = value;
+    prevString && (nodeStyle.cssText = undefined, prev = {});
+    value || (value = {});
+    let v, s;
+    for (s in prev) {
+      value[s] == null && nodeStyle.removeProperty(s);
+      delete prev[s];
+    }
+    for (s in value) {
+      v = value[s];
+      if (v !== prev[s]) {
+        nodeStyle.setProperty(s, v);
+        prev[s] = v;
+      }
+    }
+    return prev;
+  }
+  function spread(node, accessor, isSVG, skipChildren) {
+    if (typeof accessor === "function") {
+      createRenderEffect$1(current => spreadExpression(node, accessor(), current, isSVG, skipChildren));
+    } else spreadExpression(node, accessor, undefined, isSVG, skipChildren);
+  }
   function insert$1(parent, accessor, marker, initial) {
     if (marker !== undefined && !initial) initial = [];
     if (typeof accessor !== "function") return insertExpression$1(parent, accessor, initial, marker);
     createRenderEffect$1(current => insertExpression$1(parent, accessor(), current, marker), initial);
+  }
+  function assign(node, props, isSVG, skipChildren, prevProps = {}, skipRef = false) {
+    props || (props = {});
+    for (const prop in prevProps) {
+      if (!(prop in props)) {
+        if (prop === "children") continue;
+        assignProp(node, prop, null, prevProps[prop], isSVG, skipRef);
+      }
+    }
+    for (const prop in props) {
+      if (prop === "children") {
+        if (!skipChildren) insertExpression$1(node, props.children);
+        continue;
+      }
+      const value = props[prop];
+      prevProps[prop] = assignProp(node, prop, value, prevProps[prop], isSVG, skipRef);
+    }
+  }
+  function toPropertyName(name) {
+    return name.toLowerCase().replace(/-([a-z])/g, (_, w) => w.toUpperCase());
+  }
+  function toggleClassKey(node, key, value) {
+    const classNames = key.trim().split(/\s+/);
+    for (let i = 0, nameLen = classNames.length; i < nameLen; i++) node.classList.toggle(classNames[i], value);
+  }
+  function assignProp(node, prop, value, prev, isSVG, skipRef) {
+    let isCE, isProp, isChildProp;
+    if (prop === "style") return style$1(node, value, prev);
+    if (prop === "classList") return classList(node, value, prev);
+    if (value === prev) return prev;
+    if (prop === "ref") {
+      if (!skipRef) {
+        value(node);
+      }
+    } else if (prop.slice(0, 3) === "on:") {
+      const e = prop.slice(3);
+      prev && node.removeEventListener(e, prev);
+      value && node.addEventListener(e, value);
+    } else if (prop.slice(0, 10) === "oncapture:") {
+      const e = prop.slice(10);
+      prev && node.removeEventListener(e, prev, true);
+      value && node.addEventListener(e, value, true);
+    } else if (prop.slice(0, 2) === "on") {
+      const name = prop.slice(2).toLowerCase();
+      const delegate = DelegatedEvents.has(name);
+      if (!delegate && prev) {
+        const h = Array.isArray(prev) ? prev[0] : prev;
+        node.removeEventListener(name, h);
+      }
+      if (delegate || value) {
+        addEventListener(node, name, value, delegate);
+        delegate && delegateEvents([name]);
+      }
+    } else if ((isChildProp = ChildProperties.has(prop)) || !isSVG && (PropAliases[prop] || (isProp = Properties.has(prop))) || (isCE = node.nodeName.includes("-"))) {
+      if (prop === "class" || prop === "className") className$1(node, value);else if (isCE && !isProp && !isChildProp) node[toPropertyName(prop)] = value;else node[PropAliases[prop] || prop] = value;
+    } else {
+      const ns = isSVG && prop.indexOf(":") > -1 && SVGNamespace[prop.split(":")[0]];
+      if (ns) setAttributeNS(node, ns, prop, value);else setAttribute$1(node, Aliases[prop] || prop, value);
+    }
+    return value;
   }
   function eventHandler(e) {
     const key = `$$${e.type}`;
@@ -815,6 +1045,15 @@ var Lado = (function () {
       }
       node = node.host && node.host !== node && node.host instanceof Node ? node.host : node.parentNode;
     }
+  }
+  function spreadExpression(node, props, prevProps = {}, isSVG, skipChildren) {
+    props || (props = {});
+    if (!skipChildren && "children" in props) {
+      createRenderEffect$1(() => prevProps.children = insertExpression$1(node, props.children, prevProps.children));
+    }
+    props.ref && props.ref(node);
+    createRenderEffect$1(() => assign(node, props, isSVG, true, prevProps, true));
+    return prevProps;
   }
   function insertExpression$1(parent, value, current, marker, unwrapArray) {
     if (sharedConfig$1.context && !current) current = [...parent.childNodes];
@@ -928,17 +1167,1496 @@ var Lado = (function () {
     return [node];
   }
 
-  const rate = 1000 / 60;
-  const ticks = {
-    seconds: 60 * rate,
-    half: 30 * rate,
-    thirds: 20 * rate,
-    lengths: 15 * rate,
-    sixth: 10 * rate,
-    five: 5 * rate,
-    three: 3 * rate,
-    one: 1 * rate
+  function bindEvent(target, type, handler) {
+    target.addEventListener(type, handler);
+    return () => target.removeEventListener(type, handler);
+  }
+
+  function intercept([value, setValue], get, set) {
+    return [get ? () => get(value()) : value, set ? v => setValue(set(v)) : setValue];
+  }
+
+  function querySelector(selector) {
+    // Guard against selector being an invalid CSS selector
+    try {
+      return document.querySelector(selector);
+    } catch (e) {
+      return null;
+    }
+  }
+
+  function scrollToHash(hash, fallbackTop) {
+    const el = querySelector(`#${hash}`);
+
+    if (el) {
+      el.scrollIntoView();
+    } else if (fallbackTop) {
+      window.scrollTo(0, 0);
+    }
+  }
+
+  function createIntegration(get, set, init, utils) {
+    let ignore = false;
+
+    const wrap = value => typeof value === "string" ? {
+      value
+    } : value;
+
+    const signal = intercept(createSignal$1(wrap(get()), {
+      equals: (a, b) => a.value === b.value
+    }), undefined, next => {
+      !ignore && set(next);
+      return next;
+    });
+    init && onCleanup$1(init((value = get()) => {
+      ignore = true;
+      signal[1](wrap(value));
+      ignore = false;
+    }));
+    return {
+      signal,
+      utils
+    };
+  }
+  function normalizeIntegration(integration) {
+    if (!integration) {
+      return {
+        signal: createSignal$1({
+          value: ""
+        })
+      };
+    } else if (Array.isArray(integration)) {
+      return {
+        signal: integration
+      };
+    }
+
+    return integration;
+  }
+  function pathIntegration() {
+    return createIntegration(() => ({
+      value: window.location.pathname + window.location.search + window.location.hash,
+      state: history.state
+    }), ({
+      value,
+      replace,
+      scroll,
+      state
+    }) => {
+      if (replace) {
+        window.history.replaceState(state, "", value);
+      } else {
+        window.history.pushState(state, "", value);
+      }
+
+      scrollToHash(window.location.hash.slice(1), scroll);
+    }, notify => bindEvent(window, "popstate", () => notify()), {
+      go: delta => window.history.go(delta)
+    });
+  }
+
+  const hasSchemeRegex = /^(?:[a-z0-9]+:)?\/\//i;
+  const trimPathRegex = /^\/+|\/+$/g;
+
+  function normalize(path, omitSlash = false) {
+    const s = path.replace(trimPathRegex, "");
+    return s ? omitSlash || /^[?#]/.test(s) ? s : "/" + s : "";
+  }
+
+  function resolvePath(base, path, from) {
+    if (hasSchemeRegex.test(path)) {
+      return undefined;
+    }
+
+    const basePath = normalize(base);
+    const fromPath = from && normalize(from);
+    let result = "";
+
+    if (!fromPath || path.startsWith("/")) {
+      result = basePath;
+    } else if (fromPath.toLowerCase().indexOf(basePath.toLowerCase()) !== 0) {
+      result = basePath + fromPath;
+    } else {
+      result = fromPath;
+    }
+
+    return (result || "/") + normalize(path, !result);
+  }
+  function invariant(value, message) {
+    if (value == null) {
+      throw new Error(message);
+    }
+
+    return value;
+  }
+  function joinPaths(from, to) {
+    return normalize(from).replace(/\/*(\*.*)?$/g, "") + normalize(to);
+  }
+  function extractSearchParams(url) {
+    const params = {};
+    url.searchParams.forEach((value, key) => {
+      params[key] = value;
+    });
+    return params;
+  }
+  function urlDecode(str, isQuery) {
+    return decodeURIComponent(isQuery ? str.replace(/\+/g, " ") : str);
+  }
+  function createMatcher(path, partial) {
+    const [pattern, splat] = path.split("/*", 2);
+    const segments = pattern.split("/").filter(Boolean);
+    const len = segments.length;
+    return location => {
+      const locSegments = location.split("/").filter(Boolean);
+      const lenDiff = locSegments.length - len;
+
+      if (lenDiff < 0 || lenDiff > 0 && splat === undefined && !partial) {
+        return null;
+      }
+
+      const match = {
+        path: len ? "" : "/",
+        params: {}
+      };
+
+      for (let i = 0; i < len; i++) {
+        const segment = segments[i];
+        const locSegment = locSegments[i];
+
+        if (segment[0] === ":") {
+          match.params[segment.slice(1)] = locSegment;
+        } else if (segment.localeCompare(locSegment, undefined, {
+          sensitivity: "base"
+        }) !== 0) {
+          return null;
+        }
+
+        match.path += `/${locSegment}`;
+      }
+
+      if (splat) {
+        match.params[splat] = lenDiff ? locSegments.slice(-lenDiff).join("/") : "";
+      }
+
+      return match;
+    };
+  }
+  function scoreRoute(route) {
+    const [pattern, splat] = route.pattern.split("/*", 2);
+    const segments = pattern.split("/").filter(Boolean);
+    return segments.reduce((score, segment) => score + (segment.startsWith(":") ? 2 : 3), segments.length - (splat === undefined ? 0 : 1));
+  }
+  function createMemoObject(fn) {
+    const map = new Map();
+    const owner = getOwner();
+    return new Proxy({}, {
+      get(_, property) {
+        if (!map.has(property)) {
+          runWithOwner(owner, () => map.set(property, createMemo$1(() => fn()[property])));
+        }
+
+        return map.get(property)();
+      },
+
+      getOwnPropertyDescriptor() {
+        return {
+          enumerable: true,
+          configurable: true
+        };
+      },
+
+      ownKeys() {
+        return Reflect.ownKeys(fn());
+      }
+
+    });
+  }
+  function expandOptionals(pattern) {
+    let match = /(\/?\:[^\/]+)\?/.exec(pattern);
+    if (!match) return [pattern];
+    let prefix = pattern.slice(0, match.index);
+    let suffix = pattern.slice(match.index + match[0].length);
+    const prefixes = [prefix, prefix += match[1]]; // This section handles adjacent optional params. We don't actually want all permuations since
+    // that will lead to equivalent routes which have the same number of params. For example
+    // `/:a?/:b?/:c`? only has the unique expansion: `/`, `/:a`, `/:a/:b`, `/:a/:b/:c` and we can
+    // discard `/:b`, `/:c`, `/:b/:c` by building them up in order and not recursing. This also helps
+    // ensure predictability where earlier params have precidence.
+
+    while (match = /^(\/\:[^\/]+)\?/.exec(suffix)) {
+      prefixes.push(prefix += match[1]);
+      suffix = suffix.slice(match[0].length);
+    }
+
+    return expandOptionals(suffix).reduce((results, expansion) => [...results, ...prefixes.map(p => p + expansion)], []);
+  }
+
+  const MAX_REDIRECTS = 100;
+  const RouterContextObj = createContext();
+  const RouteContextObj = createContext();
+  const useRouter = () => invariant(useContext(RouterContextObj), "Make sure your app is wrapped in a <Router />");
+  let TempRoute;
+  const useRoute = () => TempRoute || useContext(RouteContextObj) || useRouter().base;
+  const useResolvedPath = path => {
+    const route = useRoute();
+    return createMemo$1(() => route.resolvePath(path()));
   };
+  const useHref = to => {
+    const router = useRouter();
+    return createMemo$1(() => {
+      const to_ = to();
+      return to_ !== undefined ? router.renderPath(to_) : to_;
+    });
+  };
+  const useLocation = () => useRouter().location;
+  function createRoutes(routeDef, base = "", fallback) {
+    const {
+      component,
+      data,
+      children
+    } = routeDef;
+    const isLeaf = !children || Array.isArray(children) && !children.length;
+    const shared = {
+      key: routeDef,
+      element: component ? () => createComponent$1(component, {}) : () => {
+        const {
+          element
+        } = routeDef;
+        return element === undefined && fallback ? createComponent$1(fallback, {}) : element;
+      },
+      preload: routeDef.component ? component.preload : routeDef.preload,
+      data
+    };
+    return asArray(routeDef.path).reduce((acc, path) => {
+      for (const originalPath of expandOptionals(path)) {
+        const path = joinPaths(base, originalPath);
+        const pattern = isLeaf ? path : path.split("/*", 1)[0];
+        acc.push({ ...shared,
+          originalPath,
+          pattern,
+          matcher: createMatcher(pattern, !isLeaf)
+        });
+      }
+
+      return acc;
+    }, []);
+  }
+  function createBranch(routes, index = 0) {
+    return {
+      routes,
+      score: scoreRoute(routes[routes.length - 1]) * 10000 - index,
+
+      matcher(location) {
+        const matches = [];
+
+        for (let i = routes.length - 1; i >= 0; i--) {
+          const route = routes[i];
+          const match = route.matcher(location);
+
+          if (!match) {
+            return null;
+          }
+
+          matches.unshift({ ...match,
+            route
+          });
+        }
+
+        return matches;
+      }
+
+    };
+  }
+
+  function asArray(value) {
+    return Array.isArray(value) ? value : [value];
+  }
+
+  function createBranches(routeDef, base = "", fallback, stack = [], branches = []) {
+    const routeDefs = asArray(routeDef);
+
+    for (let i = 0, len = routeDefs.length; i < len; i++) {
+      const def = routeDefs[i];
+
+      if (def && typeof def === "object" && def.hasOwnProperty("path")) {
+        const routes = createRoutes(def, base, fallback);
+
+        for (const route of routes) {
+          stack.push(route);
+
+          if (def.children) {
+            createBranches(def.children, route.pattern, fallback, stack, branches);
+          } else {
+            const branch = createBranch([...stack], branches.length);
+            branches.push(branch);
+          }
+
+          stack.pop();
+        }
+      }
+    } // Stack will be empty on final return
+
+
+    return stack.length ? branches : branches.sort((a, b) => b.score - a.score);
+  }
+  function getRouteMatches(branches, location) {
+    for (let i = 0, len = branches.length; i < len; i++) {
+      const match = branches[i].matcher(location);
+
+      if (match) {
+        return match;
+      }
+    }
+
+    return [];
+  }
+  function createLocation(path, state) {
+    const origin = new URL("http://sar");
+    const url = createMemo$1(prev => {
+      const path_ = path();
+
+      try {
+        return new URL(path_, origin);
+      } catch (err) {
+        console.error(`Invalid path ${path_}`);
+        return prev;
+      }
+    }, origin, {
+      equals: (a, b) => a.href === b.href
+    });
+    const pathname = createMemo$1(() => urlDecode(url().pathname));
+    const search = createMemo$1(() => urlDecode(url().search, true));
+    const hash = createMemo$1(() => urlDecode(url().hash));
+    const key = createMemo$1(() => "");
+    return {
+      get pathname() {
+        return pathname();
+      },
+
+      get search() {
+        return search();
+      },
+
+      get hash() {
+        return hash();
+      },
+
+      get state() {
+        return state();
+      },
+
+      get key() {
+        return key();
+      },
+
+      query: createMemoObject(on(search, () => extractSearchParams(url())))
+    };
+  }
+  function createRouterContext(integration, base = "", data, out) {
+    const {
+      signal: [source, setSource],
+      utils = {}
+    } = normalizeIntegration(integration);
+
+    const parsePath = utils.parsePath || (p => p);
+
+    const renderPath = utils.renderPath || (p => p);
+
+    const basePath = resolvePath("", base);
+    const output = undefined;
+
+    if (basePath === undefined) {
+      throw new Error(`${basePath} is not a valid base path`);
+    } else if (basePath && !source().value) {
+      setSource({
+        value: basePath,
+        replace: true,
+        scroll: false
+      });
+    }
+
+    const [isRouting, start] = useTransition();
+    const [reference, setReference] = createSignal$1(source().value);
+    const [state, setState] = createSignal$1(source().state);
+    const location = createLocation(reference, state);
+    const referrers = [];
+    const baseRoute = {
+      pattern: basePath,
+      params: {},
+      path: () => basePath,
+      outlet: () => null,
+
+      resolvePath(to) {
+        return resolvePath(basePath, to);
+      }
+
+    };
+
+    if (data) {
+      try {
+        TempRoute = baseRoute;
+        baseRoute.data = data({
+          data: undefined,
+          params: {},
+          location,
+          navigate: navigatorFactory(baseRoute)
+        });
+      } finally {
+        TempRoute = undefined;
+      }
+    }
+
+    function navigateFromRoute(route, to, options) {
+      // Untrack in case someone navigates in an effect - don't want to track `reference` or route paths
+      untrack$1(() => {
+        if (typeof to === "number") {
+          if (!to) ; else if (utils.go) {
+            utils.go(to);
+          } else {
+            console.warn("Router integration does not support relative routing");
+          }
+
+          return;
+        }
+
+        const {
+          replace,
+          resolve,
+          scroll,
+          state: nextState
+        } = {
+          replace: false,
+          resolve: true,
+          scroll: true,
+          ...options
+        };
+        const resolvedTo = resolve ? route.resolvePath(to) : resolvePath("", to);
+
+        if (resolvedTo === undefined) {
+          throw new Error(`Path '${to}' is not a routable path`);
+        } else if (referrers.length >= MAX_REDIRECTS) {
+          throw new Error("Too many redirects");
+        }
+
+        const current = reference();
+
+        if (resolvedTo !== current || nextState !== state()) {
+          {
+            const len = referrers.push({
+              value: current,
+              replace,
+              scroll,
+              state: state()
+            });
+            start(() => {
+              setReference(resolvedTo);
+              setState(nextState);
+            }).then(() => {
+              if (referrers.length === len) {
+                navigateEnd({
+                  value: resolvedTo,
+                  state: nextState
+                });
+              }
+            });
+          }
+        }
+      });
+    }
+
+    function navigatorFactory(route) {
+      // Workaround for vite issue (https://github.com/vitejs/vite/issues/3803)
+      route = route || useContext(RouteContextObj) || baseRoute;
+      return (to, options) => navigateFromRoute(route, to, options);
+    }
+
+    function navigateEnd(next) {
+      const first = referrers[0];
+
+      if (first) {
+        if (next.value !== first.value || next.state !== first.state) {
+          setSource({ ...next,
+            replace: first.replace,
+            scroll: first.scroll
+          });
+        }
+
+        referrers.length = 0;
+      }
+    }
+
+    createRenderEffect$1(() => {
+      const {
+        value,
+        state
+      } = source(); // Untrack this whole block so `start` doesn't cause Solid's Listener to be preserved
+
+      untrack$1(() => {
+        if (value !== reference()) {
+          start(() => {
+            setReference(value);
+            setState(state);
+          });
+        }
+      });
+    });
+
+    {
+      function isSvg(el) {
+        return el.namespaceURI === "http://www.w3.org/2000/svg";
+      }
+
+      function handleAnchorClick(evt) {
+        if (evt.defaultPrevented || evt.button !== 0 || evt.metaKey || evt.altKey || evt.ctrlKey || evt.shiftKey) return;
+        const a = evt.composedPath().find(el => el instanceof Node && el.nodeName.toUpperCase() === "A");
+        if (!a) return;
+        const svg = isSvg(a);
+        const href = svg ? a.href.baseVal : a.href;
+        const target = svg ? a.target.baseVal : a.target;
+        if (target || !href && !a.hasAttribute("state")) return;
+        const rel = (a.getAttribute("rel") || "").split(/\s+/);
+        if (a.hasAttribute("download") || rel && rel.includes("external")) return;
+        const url = svg ? new URL(href, document.baseURI) : new URL(href);
+        const pathname = urlDecode(url.pathname);
+        if (url.origin !== window.location.origin || basePath && pathname && !pathname.toLowerCase().startsWith(basePath.toLowerCase())) return;
+        const to = parsePath(pathname + urlDecode(url.search, true) + urlDecode(url.hash));
+        const state = a.getAttribute("state");
+        evt.preventDefault();
+        navigateFromRoute(baseRoute, to, {
+          resolve: false,
+          replace: a.hasAttribute("replace"),
+          scroll: !a.hasAttribute("noscroll"),
+          state: state && JSON.parse(state)
+        });
+      }
+
+      document.addEventListener("click", handleAnchorClick);
+      onCleanup$1(() => document.removeEventListener("click", handleAnchorClick));
+    }
+
+    return {
+      base: baseRoute,
+      out: output,
+      location,
+      isRouting,
+      renderPath,
+      parsePath,
+      navigatorFactory
+    };
+  }
+  function createRouteContext(router, parent, child, match) {
+    const {
+      base,
+      location,
+      navigatorFactory
+    } = router;
+    const {
+      pattern,
+      element: outlet,
+      preload,
+      data
+    } = match().route;
+    const path = createMemo$1(() => match().path);
+    const params = createMemoObject(() => match().params);
+    preload && preload();
+    const route = {
+      parent,
+      pattern,
+
+      get child() {
+        return child();
+      },
+
+      path,
+      params,
+      data: parent.data,
+      outlet,
+
+      resolvePath(to) {
+        return resolvePath(base.path(), to, path());
+      }
+
+    };
+
+    if (data) {
+      try {
+        TempRoute = route;
+        route.data = data({
+          data: parent.data,
+          params,
+          location,
+          navigate: navigatorFactory(route)
+        });
+      } finally {
+        TempRoute = undefined;
+      }
+    }
+
+    return route;
+  }
+
+  const _tmpl$$5 = /*#__PURE__*/template$1(`<a></a>`);
+  const Router = props => {
+    const {
+      source,
+      url,
+      base,
+      data,
+      out
+    } = props;
+    const integration = source || (pathIntegration());
+    const routerState = createRouterContext(integration, base, data);
+    return createComponent$1(RouterContextObj.Provider, {
+      value: routerState,
+
+      get children() {
+        return props.children;
+      }
+
+    });
+  };
+  const Routes = props => {
+    const router = useRouter();
+    const parentRoute = useRoute();
+    const routeDefs = children(() => props.children);
+    const branches = createMemo$1(() => createBranches(routeDefs(), joinPaths(parentRoute.pattern, props.base || ""), Outlet));
+    const matches = createMemo$1(() => getRouteMatches(branches(), router.location.pathname));
+
+    if (router.out) {
+      router.out.matches.push(matches().map(({
+        route,
+        path,
+        params
+      }) => ({
+        originalPath: route.originalPath,
+        pattern: route.pattern,
+        path,
+        params
+      })));
+    }
+
+    const disposers = [];
+    let root;
+    const routeStates = createMemo$1(on(matches, (nextMatches, prevMatches, prev) => {
+      let equal = prevMatches && nextMatches.length === prevMatches.length;
+      const next = [];
+
+      for (let i = 0, len = nextMatches.length; i < len; i++) {
+        const prevMatch = prevMatches && prevMatches[i];
+        const nextMatch = nextMatches[i];
+
+        if (prev && prevMatch && nextMatch.route.key === prevMatch.route.key) {
+          next[i] = prev[i];
+        } else {
+          equal = false;
+
+          if (disposers[i]) {
+            disposers[i]();
+          }
+
+          createRoot$1(dispose => {
+            disposers[i] = dispose;
+            next[i] = createRouteContext(router, next[i - 1] || parentRoute, () => routeStates()[i + 1], () => matches()[i]);
+          });
+        }
+      }
+
+      disposers.splice(nextMatches.length).forEach(dispose => dispose());
+
+      if (prev && equal) {
+        return prev;
+      }
+
+      root = next[0];
+      return next;
+    }));
+    return createComponent$1(Show$1, {
+      get when() {
+        return routeStates() && root;
+      },
+
+      children: route => createComponent$1(RouteContextObj.Provider, {
+        value: route,
+
+        get children() {
+          return route.outlet();
+        }
+
+      })
+    });
+  };
+  const Route = props => {
+    const childRoutes = children(() => props.children);
+    return mergeProps(props, {
+      get children() {
+        return childRoutes();
+      }
+
+    });
+  };
+  const Outlet = () => {
+    const route = useRoute();
+    return createComponent$1(Show$1, {
+      get when() {
+        return route.child;
+      },
+
+      children: child => createComponent$1(RouteContextObj.Provider, {
+        value: child,
+
+        get children() {
+          return child.outlet();
+        }
+
+      })
+    });
+  };
+
+  function LinkBase(props) {
+    const [, rest] = splitProps(props, ["children", "to", "href", "state"]);
+    const href = useHref(() => props.to);
+    return (() => {
+      const _el$ = _tmpl$$5.cloneNode(true);
+
+      spread(_el$, rest, false, true);
+
+      insert$1(_el$, () => props.children);
+
+      createRenderEffect$1(_p$ => {
+        const _v$ = href() || props.href,
+              _v$2 = JSON.stringify(props.state);
+
+        _v$ !== _p$._v$ && setAttribute$1(_el$, "href", _p$._v$ = _v$);
+        _v$2 !== _p$._v$2 && setAttribute$1(_el$, "state", _p$._v$2 = _v$2);
+        return _p$;
+      }, {
+        _v$: undefined,
+        _v$2: undefined
+      });
+
+      return _el$;
+    })();
+  }
+
+  function Link(props) {
+    const to = useResolvedPath(() => props.href);
+    return createComponent$1(LinkBase, mergeProps(props, {
+      get to() {
+        return to();
+      }
+
+    }));
+  }
+  function NavLink(props) {
+    props = mergeProps({
+      inactiveClass: "inactive",
+      activeClass: "active"
+    }, props);
+    const [, rest] = splitProps(props, ["activeClass", "inactiveClass", "end"]);
+    const location = useLocation();
+    const to = useResolvedPath(() => props.href);
+    const isActive = createMemo$1(() => {
+      const to_ = to();
+
+      if (to_ === undefined) {
+        return false;
+      }
+
+      const path = to_.split(/[?#]/, 1)[0].toLowerCase();
+      const loc = location.pathname.toLowerCase();
+      return props.end ? path === loc : loc.startsWith(path);
+    });
+    return createComponent$1(LinkBase, mergeProps(rest, {
+      get to() {
+        return to();
+      },
+
+      get classList() {
+        return {
+          [props.inactiveClass]: !isActive(),
+          [props.activeClass]: isActive(),
+          ...rest.classList
+        };
+      },
+
+      get ["aria-current"]() {
+        return isActive() ? "page" : undefined;
+      }
+
+    }));
+  }
+
+  const Home = props => {
+    return "Home";
+  };
+
+  const sharedConfig = {};
+
+  const equalFn = (a, b) => a === b;
+  const $TRACK = Symbol("solid-track");
+  const signalOptions = {
+    equals: equalFn
+  };
+  let runEffects = runQueue;
+  const NOTPENDING = {};
+  const STALE = 1;
+  const PENDING = 2;
+  const UNOWNED = {
+    owned: null,
+    cleanups: null,
+    context: null,
+    owner: null
+  };
+  var Owner = null;
+  let Transition = null;
+  let Listener = null;
+  let Pending = null;
+  let Updates = null;
+  let Effects = null;
+  let ExecCount = 0;
+  function createRoot(fn, detachedOwner) {
+    const listener = Listener,
+          owner = Owner,
+          unowned = fn.length === 0,
+          root = unowned && !false ? UNOWNED : {
+      owned: null,
+      cleanups: null,
+      context: null,
+      owner: detachedOwner || owner
+    },
+          updateFn = unowned ? fn : () => fn(() => cleanNode(root));
+    Owner = root;
+    Listener = null;
+    try {
+      return runUpdates(updateFn, true);
+    } finally {
+      Listener = listener;
+      Owner = owner;
+    }
+  }
+  function createSignal(value, options) {
+    options = options ? Object.assign({}, signalOptions, options) : signalOptions;
+    const s = {
+      value,
+      observers: null,
+      observerSlots: null,
+      pending: NOTPENDING,
+      comparator: options.equals || undefined
+    };
+    const setter = value => {
+      if (typeof value === "function") {
+        value = value(s.pending !== NOTPENDING ? s.pending : s.value);
+      }
+      return writeSignal(s, value);
+    };
+    return [readSignal.bind(s), setter];
+  }
+  function createRenderEffect(fn, value, options) {
+    const c = createComputation(fn, value, false, STALE);
+    updateComputation(c);
+  }
+  function createMemo(fn, value, options) {
+    options = options ? Object.assign({}, signalOptions, options) : signalOptions;
+    const c = createComputation(fn, value, true, 0);
+    c.pending = NOTPENDING;
+    c.observers = null;
+    c.observerSlots = null;
+    c.comparator = options.equals || undefined;
+    updateComputation(c);
+    return readSignal.bind(c);
+  }
+  function batch(fn) {
+    if (Pending) return fn();
+    let result;
+    const q = Pending = [];
+    try {
+      result = fn();
+    } finally {
+      Pending = null;
+    }
+    runUpdates(() => {
+      for (let i = 0; i < q.length; i += 1) {
+        const data = q[i];
+        if (data.pending !== NOTPENDING) {
+          const pending = data.pending;
+          data.pending = NOTPENDING;
+          writeSignal(data, pending);
+        }
+      }
+    }, false);
+    return result;
+  }
+  function untrack(fn) {
+    let result,
+        listener = Listener;
+    Listener = null;
+    result = fn();
+    Listener = listener;
+    return result;
+  }
+  function onCleanup(fn) {
+    if (Owner === null) ;else if (Owner.cleanups === null) Owner.cleanups = [fn];else Owner.cleanups.push(fn);
+    return fn;
+  }
+  function readSignal() {
+    const runningTransition = Transition ;
+    if (this.sources && (this.state || runningTransition )) {
+      const updates = Updates;
+      Updates = null;
+      this.state === STALE || runningTransition  ? updateComputation(this) : lookUpstream(this);
+      Updates = updates;
+    }
+    if (Listener) {
+      const sSlot = this.observers ? this.observers.length : 0;
+      if (!Listener.sources) {
+        Listener.sources = [this];
+        Listener.sourceSlots = [sSlot];
+      } else {
+        Listener.sources.push(this);
+        Listener.sourceSlots.push(sSlot);
+      }
+      if (!this.observers) {
+        this.observers = [Listener];
+        this.observerSlots = [Listener.sources.length - 1];
+      } else {
+        this.observers.push(Listener);
+        this.observerSlots.push(Listener.sources.length - 1);
+      }
+    }
+    return this.value;
+  }
+  function writeSignal(node, value, isComp) {
+    if (Pending) {
+      if (node.pending === NOTPENDING) Pending.push(node);
+      node.pending = value;
+      return value;
+    }
+    if (node.comparator) {
+      if (node.comparator(node.value, value)) return value;
+    }
+    let TransitionRunning = false;
+    node.value = value;
+    if (node.observers && node.observers.length) {
+      runUpdates(() => {
+        for (let i = 0; i < node.observers.length; i += 1) {
+          const o = node.observers[i];
+          if (TransitionRunning && Transition.disposed.has(o)) ;
+          if (TransitionRunning && !o.tState || !TransitionRunning && !o.state) {
+            if (o.pure) Updates.push(o);else Effects.push(o);
+            if (o.observers) markDownstream(o);
+          }
+          if (TransitionRunning) ;else o.state = STALE;
+        }
+        if (Updates.length > 10e5) {
+          Updates = [];
+          if (false) ;
+          throw new Error();
+        }
+      }, false);
+    }
+    return value;
+  }
+  function updateComputation(node) {
+    if (!node.fn) return;
+    cleanNode(node);
+    const owner = Owner,
+          listener = Listener,
+          time = ExecCount;
+    Listener = Owner = node;
+    runComputation(node, node.value, time);
+    Listener = listener;
+    Owner = owner;
+  }
+  function runComputation(node, value, time) {
+    let nextValue;
+    try {
+      nextValue = node.fn(value);
+    } catch (err) {
+      handleError(err);
+    }
+    if (!node.updatedAt || node.updatedAt <= time) {
+      if (node.observers && node.observers.length) {
+        writeSignal(node, nextValue);
+      } else node.value = nextValue;
+      node.updatedAt = time;
+    }
+  }
+  function createComputation(fn, init, pure, state = STALE, options) {
+    const c = {
+      fn,
+      state: state,
+      updatedAt: null,
+      owned: null,
+      sources: null,
+      sourceSlots: null,
+      cleanups: null,
+      value: init,
+      owner: Owner,
+      context: null,
+      pure
+    };
+    if (Owner === null) ;else if (Owner !== UNOWNED) {
+      {
+        if (!Owner.owned) Owner.owned = [c];else Owner.owned.push(c);
+      }
+    }
+    return c;
+  }
+  function runTop(node) {
+    const runningTransition = Transition ;
+    if (node.state === 0 || runningTransition ) return;
+    if (node.state === PENDING || runningTransition ) return lookUpstream(node);
+    if (node.suspense && untrack(node.suspense.inFallback)) return node.suspense.effects.push(node);
+    const ancestors = [node];
+    while ((node = node.owner) && (!node.updatedAt || node.updatedAt < ExecCount)) {
+      if (node.state || runningTransition ) ancestors.push(node);
+    }
+    for (let i = ancestors.length - 1; i >= 0; i--) {
+      node = ancestors[i];
+      if (node.state === STALE || runningTransition ) {
+        updateComputation(node);
+      } else if (node.state === PENDING || runningTransition ) {
+        const updates = Updates;
+        Updates = null;
+        lookUpstream(node, ancestors[0]);
+        Updates = updates;
+      }
+    }
+  }
+  function runUpdates(fn, init) {
+    if (Updates) return fn();
+    let wait = false;
+    if (!init) Updates = [];
+    if (Effects) wait = true;else Effects = [];
+    ExecCount++;
+    try {
+      const res = fn();
+      completeUpdates(wait);
+      return res;
+    } catch (err) {
+      if (!Updates) Effects = null;
+      handleError(err);
+    }
+  }
+  function completeUpdates(wait) {
+    if (Updates) {
+      runQueue(Updates);
+      Updates = null;
+    }
+    if (wait) return;
+    if (Effects.length) batch(() => {
+      runEffects(Effects);
+      Effects = null;
+    });else {
+      Effects = null;
+    }
+  }
+  function runQueue(queue) {
+    for (let i = 0; i < queue.length; i++) runTop(queue[i]);
+  }
+  function lookUpstream(node, ignore) {
+    const runningTransition = Transition ;
+    node.state = 0;
+    for (let i = 0; i < node.sources.length; i += 1) {
+      const source = node.sources[i];
+      if (source.sources) {
+        if (source.state === STALE || runningTransition ) {
+          if (source !== ignore) runTop(source);
+        } else if (source.state === PENDING || runningTransition ) lookUpstream(source, ignore);
+      }
+    }
+  }
+  function markDownstream(node) {
+    const runningTransition = Transition ;
+    for (let i = 0; i < node.observers.length; i += 1) {
+      const o = node.observers[i];
+      if (!o.state || runningTransition ) {
+        o.state = PENDING;
+        if (o.pure) Updates.push(o);else Effects.push(o);
+        o.observers && markDownstream(o);
+      }
+    }
+  }
+  function cleanNode(node) {
+    let i;
+    if (node.sources) {
+      while (node.sources.length) {
+        const source = node.sources.pop(),
+              index = node.sourceSlots.pop(),
+              obs = source.observers;
+        if (obs && obs.length) {
+          const n = obs.pop(),
+                s = source.observerSlots.pop();
+          if (index < obs.length) {
+            n.sourceSlots[s] = index;
+            obs[index] = n;
+            source.observerSlots[index] = s;
+          }
+        }
+      }
+    }
+    if (node.owned) {
+      for (i = 0; i < node.owned.length; i++) cleanNode(node.owned[i]);
+      node.owned = null;
+    }
+    if (node.cleanups) {
+      for (i = 0; i < node.cleanups.length; i++) node.cleanups[i]();
+      node.cleanups = null;
+    }
+    node.state = 0;
+    node.context = null;
+  }
+  function handleError(err) {
+    throw err;
+  }
+
+  const FALLBACK = Symbol("fallback");
+  function dispose(d) {
+    for (let i = 0; i < d.length; i++) d[i]();
+  }
+  function mapArray(list, mapFn, options = {}) {
+    let items = [],
+        mapped = [],
+        disposers = [],
+        len = 0,
+        indexes = mapFn.length > 1 ? [] : null;
+    onCleanup(() => dispose(disposers));
+    return () => {
+      let newItems = list() || [],
+          i,
+          j;
+      newItems[$TRACK];
+      return untrack(() => {
+        let newLen = newItems.length,
+            newIndices,
+            newIndicesNext,
+            temp,
+            tempdisposers,
+            tempIndexes,
+            start,
+            end,
+            newEnd,
+            item;
+        if (newLen === 0) {
+          if (len !== 0) {
+            dispose(disposers);
+            disposers = [];
+            items = [];
+            mapped = [];
+            len = 0;
+            indexes && (indexes = []);
+          }
+          if (options.fallback) {
+            items = [FALLBACK];
+            mapped[0] = createRoot(disposer => {
+              disposers[0] = disposer;
+              return options.fallback();
+            });
+            len = 1;
+          }
+        }
+        else if (len === 0) {
+          mapped = new Array(newLen);
+          for (j = 0; j < newLen; j++) {
+            items[j] = newItems[j];
+            mapped[j] = createRoot(mapper);
+          }
+          len = newLen;
+        } else {
+          temp = new Array(newLen);
+          tempdisposers = new Array(newLen);
+          indexes && (tempIndexes = new Array(newLen));
+          for (start = 0, end = Math.min(len, newLen); start < end && items[start] === newItems[start]; start++);
+          for (end = len - 1, newEnd = newLen - 1; end >= start && newEnd >= start && items[end] === newItems[newEnd]; end--, newEnd--) {
+            temp[newEnd] = mapped[end];
+            tempdisposers[newEnd] = disposers[end];
+            indexes && (tempIndexes[newEnd] = indexes[end]);
+          }
+          newIndices = new Map();
+          newIndicesNext = new Array(newEnd + 1);
+          for (j = newEnd; j >= start; j--) {
+            item = newItems[j];
+            i = newIndices.get(item);
+            newIndicesNext[j] = i === undefined ? -1 : i;
+            newIndices.set(item, j);
+          }
+          for (i = start; i <= end; i++) {
+            item = items[i];
+            j = newIndices.get(item);
+            if (j !== undefined && j !== -1) {
+              temp[j] = mapped[i];
+              tempdisposers[j] = disposers[i];
+              indexes && (tempIndexes[j] = indexes[i]);
+              j = newIndicesNext[j];
+              newIndices.set(item, j);
+            } else disposers[i]();
+          }
+          for (j = start; j < newLen; j++) {
+            if (j in temp) {
+              mapped[j] = temp[j];
+              disposers[j] = tempdisposers[j];
+              if (indexes) {
+                indexes[j] = tempIndexes[j];
+                indexes[j](j);
+              }
+            } else mapped[j] = createRoot(mapper);
+          }
+          mapped = mapped.slice(0, len = newLen);
+          items = newItems.slice(0);
+        }
+        return mapped;
+      });
+      function mapper(disposer) {
+        disposers[j] = disposer;
+        if (indexes) {
+          const [s, set] = createSignal(j);
+          indexes[j] = set;
+          return mapFn(newItems[j], s);
+        }
+        return mapFn(newItems[j]);
+      }
+    };
+  }
+  function createComponent(Comp, props) {
+    return untrack(() => Comp(props || {}));
+  }
+
+  function For(props) {
+    const fallback = "fallback" in props && {
+      fallback: () => props.fallback
+    };
+    return createMemo(mapArray(() => props.each, props.children, fallback ? fallback : undefined));
+  }
+  function Show(props) {
+    let strictEqual = false;
+    const condition = createMemo(() => props.when, undefined, {
+      equals: (a, b) => strictEqual ? a === b : !a === !b
+    });
+    return createMemo(() => {
+      const c = condition();
+      if (c) {
+        const child = props.children;
+        return (strictEqual = typeof child === "function" && child.length > 0) ? untrack(() => child(c)) : child;
+      }
+      return props.fallback;
+    });
+  }
+
+  function reconcileArrays(parentNode, a, b) {
+    let bLength = b.length,
+        aEnd = a.length,
+        bEnd = bLength,
+        aStart = 0,
+        bStart = 0,
+        after = a[aEnd - 1].nextSibling,
+        map = null;
+    while (aStart < aEnd || bStart < bEnd) {
+      if (a[aStart] === b[bStart]) {
+        aStart++;
+        bStart++;
+        continue;
+      }
+      while (a[aEnd - 1] === b[bEnd - 1]) {
+        aEnd--;
+        bEnd--;
+      }
+      if (aEnd === aStart) {
+        const node = bEnd < bLength ? bStart ? b[bStart - 1].nextSibling : b[bEnd - bStart] : after;
+        while (bStart < bEnd) parentNode.insertBefore(b[bStart++], node);
+      } else if (bEnd === bStart) {
+        while (aStart < aEnd) {
+          if (!map || !map.has(a[aStart])) a[aStart].remove();
+          aStart++;
+        }
+      } else if (a[aStart] === b[bEnd - 1] && b[bStart] === a[aEnd - 1]) {
+        const node = a[--aEnd].nextSibling;
+        parentNode.insertBefore(b[bStart++], a[aStart++].nextSibling);
+        parentNode.insertBefore(b[--bEnd], node);
+        a[aEnd] = b[bEnd];
+      } else {
+        if (!map) {
+          map = new Map();
+          let i = bStart;
+          while (i < bEnd) map.set(b[i], i++);
+        }
+        const index = map.get(a[aStart]);
+        if (index != null) {
+          if (bStart < index && index < bEnd) {
+            let i = aStart,
+                sequence = 1,
+                t;
+            while (++i < aEnd && i < bEnd) {
+              if ((t = map.get(a[i])) == null || t !== index + sequence) break;
+              sequence++;
+            }
+            if (sequence > index - bStart) {
+              const node = a[aStart];
+              while (bStart < index) parentNode.insertBefore(b[bStart++], node);
+            } else parentNode.replaceChild(b[bStart++], a[aStart++]);
+          } else aStart++;
+        } else a[aStart++].remove();
+      }
+    }
+  }
+  function render(code, element, init) {
+    let disposer;
+    createRoot(dispose => {
+      disposer = dispose;
+      element === document ? code() : insert(element, code(), element.firstChild ? null : undefined, init);
+    });
+    return () => {
+      disposer();
+      element.textContent = "";
+    };
+  }
+  function template(html, check, isSVG) {
+    const t = document.createElement("template");
+    t.innerHTML = html;
+    let node = t.content.firstChild;
+    if (isSVG) node = node.firstChild;
+    return node;
+  }
+  function setAttribute(node, name, value) {
+    if (value == null) node.removeAttribute(name);else node.setAttribute(name, value);
+  }
+  function className(node, value) {
+    if (value == null) node.removeAttribute("class");else node.className = value;
+  }
+  function style(node, value, prev = {}) {
+    const nodeStyle = node.style;
+    const prevString = typeof prev === "string";
+    if (value == null && prevString || typeof value === "string") return nodeStyle.cssText = value;
+    prevString && (nodeStyle.cssText = undefined, prev = {});
+    value || (value = {});
+    let v, s;
+    for (s in prev) {
+      value[s] == null && nodeStyle.removeProperty(s);
+      delete prev[s];
+    }
+    for (s in value) {
+      v = value[s];
+      if (v !== prev[s]) {
+        nodeStyle.setProperty(s, v);
+        prev[s] = v;
+      }
+    }
+    return prev;
+  }
+  function insert(parent, accessor, marker, initial) {
+    if (marker !== undefined && !initial) initial = [];
+    if (typeof accessor !== "function") return insertExpression(parent, accessor, initial, marker);
+    createRenderEffect(current => insertExpression(parent, accessor(), current, marker), initial);
+  }
+  function insertExpression(parent, value, current, marker, unwrapArray) {
+    if (sharedConfig.context && !current) current = [...parent.childNodes];
+    while (typeof current === "function") current = current();
+    if (value === current) return current;
+    const t = typeof value,
+          multi = marker !== undefined;
+    parent = multi && current[0] && current[0].parentNode || parent;
+    if (t === "string" || t === "number") {
+      if (sharedConfig.context) return current;
+      if (t === "number") value = value.toString();
+      if (multi) {
+        let node = current[0];
+        if (node && node.nodeType === 3) {
+          node.data = value;
+        } else node = document.createTextNode(value);
+        current = cleanChildren(parent, current, marker, node);
+      } else {
+        if (current !== "" && typeof current === "string") {
+          current = parent.firstChild.data = value;
+        } else current = parent.textContent = value;
+      }
+    } else if (value == null || t === "boolean") {
+      if (sharedConfig.context) return current;
+      current = cleanChildren(parent, current, marker);
+    } else if (t === "function") {
+      createRenderEffect(() => {
+        let v = value();
+        while (typeof v === "function") v = v();
+        current = insertExpression(parent, v, current, marker);
+      });
+      return () => current;
+    } else if (Array.isArray(value)) {
+      const array = [];
+      const currentArray = current && Array.isArray(current);
+      if (normalizeIncomingArray(array, value, current, unwrapArray)) {
+        createRenderEffect(() => current = insertExpression(parent, array, current, marker, true));
+        return () => current;
+      }
+      if (sharedConfig.context) {
+        for (let i = 0; i < array.length; i++) {
+          if (array[i].parentNode) return current = array;
+        }
+      }
+      if (array.length === 0) {
+        current = cleanChildren(parent, current, marker);
+        if (multi) return current;
+      } else if (currentArray) {
+        if (current.length === 0) {
+          appendNodes(parent, array, marker);
+        } else reconcileArrays(parent, current, array);
+      } else {
+        current && cleanChildren(parent);
+        appendNodes(parent, array);
+      }
+      current = array;
+    } else if (value instanceof Node) {
+      if (sharedConfig.context && value.parentNode) return current = multi ? [value] : value;
+      if (Array.isArray(current)) {
+        if (multi) return current = cleanChildren(parent, current, marker, value);
+        cleanChildren(parent, current, null, value);
+      } else if (current == null || current === "" || !parent.firstChild) {
+        parent.appendChild(value);
+      } else parent.replaceChild(value, parent.firstChild);
+      current = value;
+    } else ;
+    return current;
+  }
+  function normalizeIncomingArray(normalized, array, current, unwrap) {
+    let dynamic = false;
+    for (let i = 0, len = array.length; i < len; i++) {
+      let item = array[i],
+          prev = current && current[i];
+      if (item instanceof Node) {
+        normalized.push(item);
+      } else if (item == null || item === true || item === false) ; else if (Array.isArray(item)) {
+        dynamic = normalizeIncomingArray(normalized, item, prev) || dynamic;
+      } else if ((typeof item) === "function") {
+        if (unwrap) {
+          while (typeof item === "function") item = item();
+          dynamic = normalizeIncomingArray(normalized, Array.isArray(item) ? item : [item], prev) || dynamic;
+        } else {
+          normalized.push(item);
+          dynamic = true;
+        }
+      } else {
+        const value = String(item);
+        if (prev && prev.nodeType === 3 && prev.data === value) {
+          normalized.push(prev);
+        } else normalized.push(document.createTextNode(value));
+      }
+    }
+    return dynamic;
+  }
+  function appendNodes(parent, array, marker) {
+    for (let i = 0, len = array.length; i < len; i++) parent.insertBefore(array[i], marker);
+  }
+  function cleanChildren(parent, current, marker, replacement) {
+    if (marker === undefined) return parent.textContent = "";
+    const node = replacement || document.createTextNode("");
+    if (current.length) {
+      let inserted = false;
+      for (let i = current.length - 1; i >= 0; i--) {
+        const el = current[i];
+        if (node !== el) {
+          const isParent = el.parentNode === parent;
+          if (!inserted && !i) isParent ? parent.replaceChild(node, el) : parent.insertBefore(node, marker);else isParent && el.remove();
+        } else inserted = true;
+      }
+    } else parent.insertBefore(node, marker);
+    return [node];
+  }
 
   class Vec2$1 {
     static from_angle = n => new Vec2$1(Math.cos(n), Math.sin(n));
@@ -1104,44 +2822,12 @@ var Lado = (function () {
 
   }
 
-  function loop(fn) {
-    let animation_frame_id;
-    let fixed_dt = 1000 / 60;
-    let timestamp0,
-        min_dt = fixed_dt,
-        max_dt = fixed_dt * 2,
-        dt0 = fixed_dt;
-
-    function step(timestamp) {
-      let dt = timestamp0 ? timestamp - timestamp0 : fixed_dt;
-      dt = Math.min(max_dt, Math.max(min_dt, dt));
-
-      if (fn(dt, dt0)) {
-        return;
-      }
-
-      dt0 = dt;
-      timestamp0 = timestamp;
-      animation_frame_id = requestAnimationFrame(step);
-    }
-
-    animation_frame_id = requestAnimationFrame(step);
-    return () => {
-      cancelAnimationFrame(animation_frame_id);
-    };
-  }
   function owrite$1(signal, fn) {
     if (typeof fn === 'function') {
       return signal[1](fn);
     } else {
       signal[1](_ => fn);
     }
-  }
-  function write(signal, fn) {
-    return signal[1](_ => {
-      fn(_);
-      return _;
-    });
   }
   function read$1(signal) {
     if (Array.isArray(signal)) {
@@ -1152,36 +2838,36 @@ var Lado = (function () {
   }
 
   function make_ref$1() {
-    let _$ref = createSignal$1();
+    let _$ref = createSignal();
 
-    let _$clear_bounds = createSignal$1(undefined, {
+    let _$clear_bounds = createSignal(undefined, {
       equals: false
     });
 
-    let _top = createMemo$1(() => {
+    let _top = createMemo(() => {
       read$1(_$clear_bounds);
       return read$1(_$ref)?.scrollTop;
     });
 
-    createMemo$1(() => {
+    createMemo(() => {
       let top = read$1(_top);
 
       if (top !== undefined) {
         return Vec2$1.make(0, top);
       }
     });
-    let m_rect = createMemo$1(() => {
+    let m_rect = createMemo(() => {
       read$1(_$clear_bounds);
       return read$1(_$ref)?.getBoundingClientRect();
     });
-    let m_orig = createMemo$1(() => {
+    let m_orig = createMemo(() => {
       let rect = m_rect();
 
       if (rect) {
         return Vec2$1.make(rect.x, rect.y);
       }
     });
-    let m_size = createMemo$1(() => {
+    let m_size = createMemo(() => {
       let rect = m_rect();
 
       if (rect) {
@@ -1225,180 +2911,952 @@ var Lado = (function () {
     };
   }
 
-  class JPR {
-    _just_on = false;
-    _just_off = false;
-    _been_on = undefined;
-
-    get just_on() {
-      return this._just_on;
+  class Staff {
+    onScroll() {
+      this.ref.$clear_bounds();
     }
 
-    get been_on() {
-      return this._been_on;
+    get style() {
+      return this.m_style();
     }
 
-    get just_off() {
-      return this._just_off;
+    set bras(bras) {
+      this.sheet.bras = bras;
     }
 
-    _on() {
-      this._just_on = true;
+    get ties() {
+      return this.sheet.ties;
     }
 
-    _off() {
-      this._just_off = true;
+    get beams() {
+      return this.sheet.beams;
     }
 
-    update(dt, dt0) {
-      if (this._been_on !== undefined) {
-        this._been_on += dt;
-      }
-
-      if (this._just_on) {
-        this._just_on = false;
-        this._been_on = 0;
-      }
-
-      if (this._just_off) {
-        this._just_off = false;
-        this._been_on = undefined;
-      }
+    get stems() {
+      return this.sheet.stems;
     }
 
-  }
-
-  class Midi {
-    clear() {
-      this._jpr = new Map();
+    get bars() {
+      return this.sheet.bars;
     }
 
-    _jpr = new Map();
-
-    get just_ons() {
-      let {
-        _jpr
-      } = this;
-      return [..._jpr.keys()].filter(_ => _jpr.get(_).just_on);
+    get bras() {
+      return this.sheet.bras;
     }
 
-    get been_ons() {
-      let {
-        _jpr
-      } = this;
-      return [..._jpr.keys()].filter(_ => _jpr.get(_).been_on !== undefined).map(_ => [_, _jpr.get(_).been_on]);
+    get ledgers() {
+      return this.sheet.ledgers;
     }
 
-    get just_offs() {
-      let {
-        _jpr
-      } = this;
-      return [..._jpr.keys()].filter(_ => _jpr.get(_).just_off);
-    }
-
-    noteOn(note, velocity) {
-      if (!this._jpr.has(note)) {
-        this._jpr.set(note, new JPR());
-      }
-
-      this._jpr.get(note)._on();
-    }
-
-    noteOff(note) {
-      if (!this._jpr.has(note)) {
-        this._jpr.set(note, new JPR());
-      }
-
-      this._jpr.get(note)._off();
-    }
-
-    update(dt, dt0) {
-      for (let [key, value] of this._jpr) {
-        value.update(dt, dt0);
-      }
-    }
-
-    init() {
-      const noteOn = (note, velocity) => {
-        if (velocity === 0) {
-          noteOff(note);
-          return;
-        }
-
-        this.noteOn(note, velocity);
-      };
-
-      const noteOff = note => {
-        this.noteOff(note);
-      };
-
-      const onMIDIMessage = message => {
-        let data = message.data;
-        data[0] >> 4;
-            data[0] & 0xf;
-            let type = data[0] & 0xf0,
-            note = data[1],
-            velocity = data[2];
-
-        switch (type) {
-          case 144:
-            // noteOn
-            noteOn(note, velocity);
-            break;
-
-          case 128:
-            // noteOff
-            noteOff(note);
-            break;
-        }
-      };
-
-      const onMIDISuccess = midiAccess => {
-        let midi = midiAccess;
-        let inputs = midi.inputs.values();
-
-        for (let input = inputs.next(); input && !input.done; input = inputs.next()) {
-          input.value.onmidimessage = onMIDIMessage;
-        }
-      };
-
-      navigator.requestMIDIAccess({
-        sysex: true
-      }).then(onMIDISuccess);
-      return this;
+    constructor() {
+      this.ref = make_ref$1();
+      this.m_style = createMemo(() => ({
+        'font-size': `${(this.ref.size?.y || 0) / 4}px`
+      }));
+      this.sheet = make_sheet(this);
+      this.playback = make_playback$2();
     }
 
   }
 
-  let midi$1 = new Midi().init();
-  const make_midi = hooks => {
-    midi$1.clear();
-    let clear = loop((dt, dt0) => {
-      let {
-        just_ons,
-        just_offs
-      } = midi$1;
+  const make_playback$2 = solsido => {
+    let _show = createSignal(false);
 
-      if (just_ons.length > 0) {
-        hooks.just_ons(just_ons.map(_ => _));
-      }
+    let _x = createSignal(1);
 
-      if (just_offs.length > 0) {
-        hooks.just_offs(just_offs.map(_ => _));
-      }
+    let _w = createSignal(1);
 
-      midi$1.update(dt, dt0);
-    });
+    let _i = createSignal(100);
+
+    let m_style = createMemo(() => ({
+      transform: `translate(${read$1(_x)}em, 0)`,
+      width: `${read$1(_w)}em`
+    }));
+    let m_line_style = createMemo(() => ({
+      transform: `translate(${read$1(_w) * 0.01 * read$1(_i)}em, 0)`
+    }));
     return {
-      dispose() {
-        midi$1.clear();
-        clear();
+      get show() {
+        if (read$1(_show)) {
+          return this;
+        }
+      },
+
+      get line_style() {
+        return m_line_style();
+      },
+
+      get style() {
+        return m_style();
+      },
+
+      set_play(v) {
+        owrite$1(_show, v);
+      },
+
+      set xwi(xwi) {
+        let [x, w, i] = xwi.split(',');
+        owrite$1(_x, x);
+        owrite$1(_w, w);
+        owrite$1(_i, i);
       }
 
     };
   };
 
+  const make_tie = (staff, tie) => {
+    let [klass, o_pos] = tie.split('@');
+    let [x, y, x2] = o_pos.split(',');
+    x2 -= x;
+    x2 *= 100;
+    x2 = 20;
+    const m_style = createMemo(() => ({
+      transform: `translate(${x}em, ${y}em)`
+    }));
+    return {
+      x2,
+      klass,
+
+      get style() {
+        return m_style();
+      }
+
+    };
+  };
+
+  const make_beam = (staff, beam) => {
+    let [_, o_pos] = beam.split('@');
+    let [x, y, y2] = o_pos.split(',');
+    y2 -= y;
+    const m_style = createMemo(() => ({
+      transform: `translate(${x}em, ${y}em)`
+    }));
+    return {
+      get y2() {
+        return y2 * 100;
+      },
+
+      get style() {
+        return m_style();
+      }
+
+    };
+  };
+
+  const make_stem = (staff, stem) => {
+    let [_, o_pos] = stem.split('@');
+    let [x, y, h] = o_pos.split(',');
+    const m_style = createMemo(() => ({
+      transform: `translate(${x}em, ${y}em)`,
+      height: `${h}em`
+    }));
+    return {
+      set xwi(xwi) {
+        let [x, w, i] = xwi.split(',');
+        owrite$1(_x, x);
+        owrite$1(_w, w);
+        owrite$1(_i, i);
+      },
+
+      get style() {
+        return m_style();
+      }
+
+    };
+  };
+
+  const make_bar = (staff, bar) => {
+    let [_, o_pos] = bar.split('@');
+    let [x] = o_pos.split(',');
+    const m_style = createMemo(() => ({
+      transform: `translate(${x}em, 0)`
+    }));
+    return {
+      get style() {
+        return m_style();
+      }
+
+    };
+  };
+
+  const make_ledger = (staff, ledger) => {
+    let [_, o_pos] = ledger.split('@');
+    let [x, y] = o_pos.split(',');
+    const m_style = createMemo(() => ({
+      transform: `translate(${x}em, ${y}em)`
+    }));
+    return {
+      get style() {
+        return m_style();
+      }
+
+    };
+  };
+
+  const make_bra = (staff, bra) => {
+    let [glyph_klass, o_pos] = bra.split('@');
+    let [x, y] = o_pos.split(',');
+    let [glyph, ...klass] = glyph_klass.split(',');
+    const m_style = createMemo(() => ({
+      transform: `translate(${x}em, ${y}em)`
+    }));
+    return {
+      get klass() {
+        return klass.join(' ');
+      },
+
+      get glyph() {
+        return glyph;
+      },
+
+      get style() {
+        return m_style();
+      }
+
+    };
+  };
+
+  const make_sheet = staff => {
+    let _bras = createSignal([]);
+
+    let m_bras = createMemo(mapArray(_bras[0], _ => make_bra(staff, _)));
+
+    let _ledgers = createSignal([]);
+
+    let m_ledgers = createMemo(mapArray(_ledgers[0], _ => make_ledger(staff, _)));
+
+    let _bars = createSignal([]);
+
+    let m_bars = createMemo(mapArray(_bars[0], _ => make_bar(staff, _)));
+
+    let _stems = createSignal([]);
+
+    let m_stems = createMemo(mapArray(_stems[0], _ => make_stem(staff, _)));
+
+    let _beams = createSignal([]);
+
+    let m_beams = createMemo(mapArray(_beams[0], _ => make_beam(staff, _)));
+
+    let _ties = createSignal([]);
+
+    let m_ties = createMemo(mapArray(_ties[0], _ => make_tie(staff, _)));
+    return {
+      set ties(ties) {
+        owrite$1(_ties, ties);
+      },
+
+      get ties() {
+        return m_ties();
+      },
+
+      set beams(beams) {
+        owrite$1(_beams, beams);
+      },
+
+      get beams() {
+        return m_beams();
+      },
+
+      set stems(stems) {
+        owrite$1(_stems, stems);
+      },
+
+      get stems() {
+        return m_stems();
+      },
+
+      set bars(bars) {
+        owrite$1(_bars, bars);
+      },
+
+      get bars() {
+        return m_bars();
+      },
+
+      get ledgers() {
+        return m_ledgers();
+      },
+
+      set ledgers(ledgers) {
+        owrite$1(_ledgers, ledgers);
+      },
+
+      get bras() {
+        return m_bras();
+      },
+
+      set bras(bras) {
+        owrite$1(_bras, bras);
+      }
+
+    };
+  };
+
+  const gclef$1 = '';
+  const bclef$1 = '';
+  const double_note$1 = '';
+  const whole_note$1 = '';
+  const half_note$1 = '';
+  const quarter_note$1 = '';
+  const brace$1 = '';
+  const flat_accidental$1 = '';
+  const natural_accidental$1 = '';
+  const sharp_accidental$1 = '';
+  const dsharp_accidental$1 = '';
+  const dflat_accidental$1 = '';
+  const eighth_flag_up$1 = '';
+  const sixteenth_flag_up$1 = '';
+  const thirtysecond_flag_up$1 = '';
+  const sixtyfourth_flag_up$1 = '';
+  const eighth_flag_down$1 = '';
+  const sixteenth_flag_down$1 = '';
+  const thirtysecond_flag_down$1 = '';
+  const sixtyfourth_flag_down$1 = '';
+  const double_rest$1 = '';
+  const whole_rest$1 = '';
+  const half_rest$1 = '';
+  const quarter_rest$1 = '';
+  const eighth_rest$1 = '';
+  const sixteenth_rest$1 = '';
+  const thirtysecond_rest$1 = '';
+  const sixtyfourth_rest$1 = '';
+  const onetwentyeighth_rest$1 = '';
+  const zero_time$1 = '';
+  const one_time$1 = '';
+  const two_time$1 = '';
+  const three_time$1 = '';
+  const four_time$1 = '';
+  const five_time$1 = '';
+  const six_time$1 = '';
+  const seven_time$1 = '';
+  const eight_time$1 = '';
+  const nine_time$1 = '';
+  const ten_time$1 = one_time$1 + zero_time$1;
+  const twelve_time$1 = one_time$1 + two_time$1;
+  const common_time$1 = '';
+  const cut_time$1 = '';
+  const quarter_text$1 = '';
+  const barline_single$1 = '';
+  const barline_double$1 = '';
+  const barline_final$1 = '';
+  var g$1 = {
+    barline_single: barline_single$1,
+    barline_double: barline_double$1,
+    barline_final: barline_final$1,
+    quarter_text: quarter_text$1,
+    gclef: gclef$1,
+    bclef: bclef$1,
+    double_note: double_note$1,
+    whole_note: whole_note$1,
+    half_note: half_note$1,
+    quarter_note: quarter_note$1,
+    flat_accidental: flat_accidental$1,
+    natural_accidental: natural_accidental$1,
+    sharp_accidental: sharp_accidental$1,
+    dflat_accidental: dflat_accidental$1,
+    dsharp_accidental: dsharp_accidental$1,
+    eighth_flag_up: eighth_flag_up$1,
+    sixteenth_flag_up: sixteenth_flag_up$1,
+    thirtysecond_flag_up: thirtysecond_flag_up$1,
+    sixtyfourth_flag_up: sixtyfourth_flag_up$1,
+    eighth_flag_down: eighth_flag_down$1,
+    sixteenth_flag_down: sixteenth_flag_down$1,
+    thirtysecond_flag_down: thirtysecond_flag_down$1,
+    sixtyfourth_flag_down: sixtyfourth_flag_down$1,
+    brace: brace$1,
+    double_rest: double_rest$1,
+    whole_rest: whole_rest$1,
+    half_rest: half_rest$1,
+    quarter_rest: quarter_rest$1,
+    eighth_rest: eighth_rest$1,
+    sixteenth_rest: sixteenth_rest$1,
+    thirtysecond_rest: thirtysecond_rest$1,
+    sixtyfourth_rest: sixtyfourth_rest$1,
+    onetwentyeighth_rest: onetwentyeighth_rest$1,
+    zero_time: zero_time$1,
+    one_time: one_time$1,
+    two_time: two_time$1,
+    three_time: three_time$1,
+    four_time: four_time$1,
+    five_time: five_time$1,
+    six_time: six_time$1,
+    seven_time: seven_time$1,
+    eight_time: eight_time$1,
+    nine_time: nine_time$1,
+    ten_time: ten_time$1,
+    twelve_time: twelve_time$1,
+    common_time: common_time$1,
+    cut_time: cut_time$1
+  };
+
+  const _tmpl$$4 = /*#__PURE__*/template(`<vstaff><staff><lines> <line></line> <line></line> <line></line> <line></line> <line></line> </lines><ledgers></ledgers><bravura></bravura></staff></vstaff>`),
+        _tmpl$2$2 = /*#__PURE__*/template(`<div class="playback"><span class="cursor"><span class="line"></span></span></div>`),
+        _tmpl$3$2 = /*#__PURE__*/template(`<ledger></ledger>`),
+        _tmpl$4$2 = /*#__PURE__*/template(`<bar></bar>`),
+        _tmpl$5$2 = /*#__PURE__*/template(`<stem></stem>`),
+        _tmpl$6$2 = /*#__PURE__*/template(`<bra></bra>`),
+        _tmpl$7$2 = /*#__PURE__*/template(`<tie><svg width="1em" height="1em" viewBox="0 0 100 100"><path></path></svg></tie>`),
+        _tmpl$8$2 = /*#__PURE__*/template(`<beam><svg width="1em" height="1em" viewBox="0 0 100 100"><path></path></svg></beam>`);
+
+  function unbindable$1(el, eventName, callback, options) {
+    el.addEventListener(eventName, callback, options);
+    return () => el.removeEventListener(eventName, callback, options);
+  }
+
+  const App$1 = staff => props => {
+    let unbinds = [];
+    unbinds.push(unbindable$1(document, 'scroll', () => staff.onScroll(), {
+      capture: true,
+      passive: true
+    }));
+    unbinds.push(unbindable$1(window, 'resize', () => staff.onScroll(), {
+      passive: true
+    }));
+    onCleanup(() => unbinds.forEach(_ => _()));
+    return (() => {
+      const _el$ = _tmpl$$4.cloneNode(true),
+            _el$2 = _el$.firstChild,
+            _el$3 = _el$2.firstChild,
+            _el$4 = _el$3.nextSibling,
+            _el$5 = _el$4.nextSibling;
+
+      (_ => setTimeout(() => staff.ref.$ref = _))(_el$);
+
+      insert(_el$2, createComponent(Show, {
+        get when() {
+          return staff.playback.show;
+        },
+
+        children: cursor => (() => {
+          const _el$6 = _tmpl$2$2.cloneNode(true),
+                _el$7 = _el$6.firstChild,
+                _el$8 = _el$7.firstChild;
+
+          createRenderEffect(_p$ => {
+            const _v$ = cursor.style,
+                  _v$2 = cursor.line_style;
+            _p$._v$ = style(_el$7, _v$, _p$._v$);
+            _p$._v$2 = style(_el$8, _v$2, _p$._v$2);
+            return _p$;
+          }, {
+            _v$: undefined,
+            _v$2: undefined
+          });
+
+          return _el$6;
+        })()
+      }), _el$3);
+
+      insert(_el$4, createComponent(For, {
+        get each() {
+          return staff.ledgers;
+        },
+
+        children: ledger => (() => {
+          const _el$9 = _tmpl$3$2.cloneNode(true);
+
+          createRenderEffect(_$p => style(_el$9, ledger.style, _$p));
+
+          return _el$9;
+        })()
+      }), null);
+
+      insert(_el$4, createComponent(For, {
+        get each() {
+          return staff.bars;
+        },
+
+        children: bar => (() => {
+          const _el$10 = _tmpl$4$2.cloneNode(true);
+
+          createRenderEffect(_$p => style(_el$10, bar.style, _$p));
+
+          return _el$10;
+        })()
+      }), null);
+
+      insert(_el$4, createComponent(For, {
+        get each() {
+          return staff.stems;
+        },
+
+        children: stem => (() => {
+          const _el$11 = _tmpl$5$2.cloneNode(true);
+
+          createRenderEffect(_$p => style(_el$11, stem.style, _$p));
+
+          return _el$11;
+        })()
+      }), null);
+
+      insert(_el$4, createComponent(For, {
+        get each() {
+          return staff.beams;
+        },
+
+        children: beam => createComponent(Beam, {
+          get style() {
+            return beam.style;
+          },
+
+          get y2() {
+            return beam.y2;
+          }
+
+        })
+      }), null);
+
+      insert(_el$4, createComponent(For, {
+        get each() {
+          return staff.ties;
+        },
+
+        children: tie => createComponent(Tie, {
+          get klass() {
+            return tie.klass;
+          },
+
+          get style() {
+            return tie.style;
+          },
+
+          get x2() {
+            return tie.x2;
+          }
+
+        })
+      }), null);
+
+      insert(_el$5, createComponent(For, {
+        get each() {
+          return staff.bras;
+        },
+
+        children: bra => (() => {
+          const _el$12 = _tmpl$6$2.cloneNode(true);
+
+          insert(_el$12, () => g$1[bra.glyph]);
+
+          createRenderEffect(_p$ => {
+            const _v$3 = bra.klass,
+                  _v$4 = bra.style;
+            _v$3 !== _p$._v$3 && className(_el$12, _p$._v$3 = _v$3);
+            _p$._v$4 = style(_el$12, _v$4, _p$._v$4);
+            return _p$;
+          }, {
+            _v$3: undefined,
+            _v$4: undefined
+          });
+
+          return _el$12;
+        })()
+      }));
+
+      createRenderEffect(_$p => style(_el$, staff.style, _$p));
+
+      return _el$;
+    })();
+  };
+
+  function tie_path(x) {
+    return `M 0 ${x * 0.5} c ${x} -${x * 0.5}    ${x * 4} -${x * 0.5}    ${x * 5} 0
+    -${x} -${x * 0.5 - 4} -${x * 4} -${x * 0.5 - 4} -${x * 5} 0`;
+  }
+
+  function beam_path(x2, y2) {
+    let x = 0;
+    let y = 0;
+    let k = 10;
+    return `M${x},${y + k}L${x},${y}L${x2},${y2}L${x2},${y2 + k}L${x},${y + k}`;
+  }
+
+  const Tie = props => {
+    return (() => {
+      const _el$13 = _tmpl$7$2.cloneNode(true),
+            _el$14 = _el$13.firstChild,
+            _el$15 = _el$14.firstChild;
+
+      createRenderEffect(_p$ => {
+        const _v$5 = props.klass,
+              _v$6 = props.style,
+              _v$7 = tie_path(props.x2);
+
+        _v$5 !== _p$._v$5 && className(_el$13, _p$._v$5 = _v$5);
+        _p$._v$6 = style(_el$13, _v$6, _p$._v$6);
+        _v$7 !== _p$._v$7 && setAttribute(_el$15, "d", _p$._v$7 = _v$7);
+        return _p$;
+      }, {
+        _v$5: undefined,
+        _v$6: undefined,
+        _v$7: undefined
+      });
+
+      return _el$13;
+    })();
+  };
+
+  const Beam = props => {
+    props.y2;
+    return (() => {
+      const _el$16 = _tmpl$8$2.cloneNode(true),
+            _el$17 = _el$16.firstChild,
+            _el$18 = _el$17.firstChild;
+
+      createRenderEffect(_p$ => {
+        const _v$8 = props.style,
+              _v$9 = beam_path(100, props.y2);
+
+        _p$._v$8 = style(_el$16, _v$8, _p$._v$8);
+        _v$9 !== _p$._v$9 && setAttribute(_el$18, "d", _p$._v$9 = _v$9);
+        return _p$;
+      }, {
+        _v$8: undefined,
+        _v$9: undefined
+      });
+
+      return _el$16;
+    })();
+  };
+
+  function VStaff(element, options = {}) {
+    let staff = new Staff(element);
+    render(App$1(staff), element);
+    return {
+      sheet: staff.sheet,
+
+      set bras(bras) {
+        staff.bras = bras;
+      },
+
+      set xwi(xwi) {
+        staff.playback.xwi = xwi;
+      },
+
+      set playback(v) {
+        staff.playback.set_play(v);
+      }
+
+    };
+  }
+
+  const gclef = '';
+  const bclef = '';
+  const double_note = '';
+  const whole_note = '';
+  const half_note = '';
+  const quarter_note = '';
+  const brace = '';
+  const flat_accidental = '';
+  const natural_accidental = '';
+  const sharp_accidental = '';
+  const dsharp_accidental = '';
+  const dflat_accidental = '';
+  const eighth_flag_up = '';
+  const sixteenth_flag_up = '';
+  const thirtysecond_flag_up = '';
+  const sixtyfourth_flag_up = '';
+  const eighth_flag_down = '';
+  const sixteenth_flag_down = '';
+  const thirtysecond_flag_down = '';
+  const sixtyfourth_flag_down = '';
+  const double_rest = '';
+  const whole_rest = '';
+  const half_rest = '';
+  const quarter_rest = '';
+  const eighth_rest = '';
+  const sixteenth_rest = '';
+  const thirtysecond_rest = '';
+  const sixtyfourth_rest = '';
+  const onetwentyeighth_rest = '';
+  const zero_time = '';
+  const one_time = '';
+  const two_time = '';
+  const three_time = '';
+  const four_time = '';
+  const five_time = '';
+  const six_time = '';
+  const seven_time = '';
+  const eight_time = '';
+  const nine_time = '';
+  const ten_time = one_time + zero_time;
+  const twelve_time = one_time + two_time;
+  const common_time = '';
+  const cut_time = '';
+  const quarter_text = '';
+  const barline_single = '';
+  const barline_double = '';
+  const barline_final = '';
+  var g = {
+    barline_single,
+    barline_double,
+    barline_final,
+    quarter_text,
+    gclef,
+    bclef,
+    double_note,
+    whole_note,
+    half_note,
+    quarter_note,
+    flat_accidental,
+    natural_accidental,
+    sharp_accidental,
+    dflat_accidental,
+    dsharp_accidental,
+    eighth_flag_up,
+    sixteenth_flag_up,
+    thirtysecond_flag_up,
+    sixtyfourth_flag_up,
+    eighth_flag_down,
+    sixteenth_flag_down,
+    thirtysecond_flag_down,
+    sixtyfourth_flag_down,
+    eighth_flag_up,
+    sixteenth_flag_up,
+    thirtysecond_flag_up,
+    sixtyfourth_flag_up,
+    brace,
+    double_rest,
+    whole_rest,
+    half_rest,
+    quarter_rest,
+    eighth_rest,
+    sixteenth_rest,
+    thirtysecond_rest,
+    sixtyfourth_rest,
+    onetwentyeighth_rest,
+    zero_time,
+    one_time,
+    two_time,
+    three_time,
+    four_time,
+    five_time,
+    six_time,
+    seven_time,
+    eight_time,
+    nine_time,
+    ten_time,
+    twelve_time,
+    common_time,
+    cut_time
+  };
+
+  class Vec2 {
+    static from_angle = n => new Vec2(Math.cos(n), Math.sin(n));
+    static make = (x, y) => new Vec2(x, y);
+
+    static get unit() {
+      return new Vec2(1, 1);
+    }
+
+    static get zero() {
+      return new Vec2(0, 0);
+    }
+
+    get vs() {
+      return [this.x, this.y];
+    }
+
+    get mul_inverse() {
+      return new Vec2(1 / this.x, 1 / this.y);
+    }
+
+    get inverse() {
+      return new Vec2(-this.x, -this.y);
+    }
+
+    get half() {
+      return new Vec2(this.x / 2, this.y / 2);
+    }
+
+    get length_squared() {
+      return this.x * this.x + this.y * this.y;
+    }
+
+    get length() {
+      return Math.sqrt(this.length_squared);
+    }
+
+    get normalize() {
+      if (this.length === 0) {
+        return Vec2.zero;
+      }
+
+      return this.scale(1 / this.length);
+    }
+
+    get perpendicular() {
+      return new Vec2(-this.y, this.x);
+    }
+
+    equals(v) {
+      return this.x === v.x && this.y === v.y;
+    }
+
+    get clone() {
+      return new Vec2(this.x, this.y);
+    }
+
+    get angle() {
+      return Math.atan2(this.y, this.x);
+    }
+
+    constructor(x, y) {
+      this.x = x;
+      this.y = y;
+    }
+
+    dot(v) {
+      return this.x * v.x + this.y * v.y;
+    }
+
+    cross(v) {
+      return this.x * v.y - this.y * v.x;
+    }
+
+    project_to(v) {
+      let lsq = v.length_squared;
+      let dp = this.dot(v);
+      return Vec2.make(dp * v.x / lsq, dp * v.y / lsq);
+    }
+
+    distance(v) {
+      return this.sub(v).length;
+    }
+
+    addy(n) {
+      return Vec2.make(this.x, this.y + n);
+    }
+
+    add_angle(n) {
+      return Vec2.from_angle(this.angle + n);
+    }
+
+    scale(n) {
+      let {
+        clone
+      } = this;
+      return clone.scale_in(n);
+    }
+
+    scale_in(n) {
+      this.x *= n;
+      this.y *= n;
+      return this;
+    }
+
+    add(v) {
+      let {
+        clone
+      } = this;
+      return clone.add_in(v);
+    }
+
+    add_in(v) {
+      this.x += v.x;
+      this.y += v.y;
+      return this;
+    }
+
+    sub(v) {
+      let {
+        clone
+      } = this;
+      return clone.sub_in(v);
+    }
+
+    sub_in(v) {
+      this.x -= v.x;
+      this.y -= v.y;
+      return this;
+    }
+
+    mul(v) {
+      let {
+        clone
+      } = this;
+      return clone.mul_in(v);
+    }
+
+    mul_in(v) {
+      this.x *= v.x;
+      this.y *= v.y;
+      return this;
+    }
+
+    div(v) {
+      let {
+        clone
+      } = this;
+      return clone.div_in(v);
+    }
+
+    div_in(v) {
+      this.x /= v.x;
+      this.y /= v.y;
+      return this;
+    }
+
+    set_in(x, y = this.y) {
+      this.x = x;
+      this.y = y;
+      return this;
+    }
+
+  }
+
+  function loop(fn) {
+    let animation_frame_id;
+    let fixed_dt = 1000 / 60;
+    let timestamp0,
+        min_dt = fixed_dt,
+        max_dt = fixed_dt * 2,
+        dt0 = fixed_dt;
+
+    function step(timestamp) {
+      let dt = timestamp0 ? timestamp - timestamp0 : fixed_dt;
+      dt = Math.min(max_dt, Math.max(min_dt, dt));
+
+      if (fn(dt, dt0)) {
+        return;
+      }
+
+      dt0 = dt;
+      timestamp0 = timestamp;
+      animation_frame_id = requestAnimationFrame(step);
+    }
+
+    animation_frame_id = requestAnimationFrame(step);
+    return () => {
+      cancelAnimationFrame(animation_frame_id);
+    };
+  }
+  function owrite(signal, fn) {
+    if (typeof fn === 'function') {
+      return signal[1](fn);
+    } else {
+      signal[1](_ => fn);
+    }
+  }
+  function write(signal, fn) {
+    return signal[1](_ => {
+      fn(_);
+      return _;
+    });
+  }
+  function read(signal) {
+    if (Array.isArray(signal)) {
+      return signal[0]();
+    } else {
+      return signal();
+    }
+  }
+
   class HasAudioAnalyser {
+    _set_data(data) {
+      this.data = data;
+      return this;
+    }
+
     get maxFilterFreq() {
       return this.context.sampleRate / 2;
     }
@@ -1439,14 +3897,6 @@ var Lado = (function () {
 
   }
 
-  function load_audio(src) {
-    return fetch(src).then(_ => _.arrayBuffer());
-  }
-
-  function decode_audio(context, buffer) {
-    return context.decodeAudioData(buffer);
-  }
-
   function ads(param, now, {
     a,
     d,
@@ -1459,7 +3909,6 @@ var Lado = (function () {
     /* not needed ? */
     //param.setValueAtTime(s, now + a + d)
   }
-
   function r(param, now, {
     s,
     r
@@ -1471,13 +3920,17 @@ var Lado = (function () {
     param.linearRampToValueAtTime(min, now + (r || 0));
   }
 
-  class SamplesPlayer {
-    get context() {
-      if (!this._context) {
-        this._context = new AudioContext();
-      }
+  function load_audio(src) {
+    return fetch(src).then(_ => _.arrayBuffer());
+  }
 
-      return this._context;
+  function decode_audio(context, buffer) {
+    return context.decodeAudioData(buffer);
+  }
+
+  class SamplesPlayer {
+    constructor(context) {
+      this.context = context;
     }
 
     get currentTime() {
@@ -1520,11 +3973,6 @@ var Lado = (function () {
   }
 
   class SamplePlayer extends HasAudioAnalyser {
-    _set_data(data) {
-      this.data = data;
-      return this;
-    }
-
     constructor(context, buffer) {
       super(context);
       this.buffer = buffer;
@@ -2518,7 +4966,7 @@ var Lado = (function () {
    * Get the note midi
    * @function
    */
-  const midi = (note) => get$2(note).midi;
+  const midi$1 = (note) => get$2(note).midi;
   /**
    * Get the note midi
    * @function
@@ -2699,7 +5147,7 @@ var Lado = (function () {
       pitchClass,
       accidentals,
       octave,
-      midi,
+      midi: midi$1,
       ascending,
       descending,
       sortedNames,
@@ -3050,10 +5498,473 @@ var Lado = (function () {
 
     return index$3.fromFreq(__.freq);
   };
+  const note_freq = _ => index$3.get(_).freq;
   const enharmonic = _ => index$3.enharmonic(_);
   const perfect_c_sharps = [...Array(7)].reduce((acc, _) => [...acc, transpose$1(acc[acc.length - 1], 'P5')], ['C']);
   const perfect_c_flats = [...Array(7)].reduce((acc, _) => [...acc, transpose$1(acc[acc.length - 1], 'P4')], ['C']);
   const majorKey = _ => index$2.majorKey(_);
+
+  class OscPlayers {
+    constructor(context) {
+      this.context = context;
+    }
+
+    get currentTime() {
+      return this.context.currentTime;
+    }
+
+    async init(data) {}
+
+    _ps = new Map();
+
+    attack(synth, note, now = this.context.currentTime) {
+      let p = new OscPlayer(this.context, note_freq(note))._set_data({
+        synth
+      });
+
+      p.attack(now);
+
+      this._ps.set(note, p);
+    }
+
+    release(note, now = this.context.currentTime) {
+      let _ = this._ps.get(note);
+
+      if (_) {
+        _.release(now);
+
+        this._ps.delete(note);
+      }
+    }
+
+  }
+
+  function getOscillator(context, type, detune = 0) {
+    return new OscillatorNode(context, {
+      type,
+      detune
+    });
+  }
+
+  class OscPlayer extends HasAudioAnalyser {
+    constructor(context, freq) {
+      super(context);
+      this.freq = freq;
+    }
+
+    _attack(now = this.context.currentTime) {
+      let {
+        context,
+        maxFilterFreq
+      } = this;
+      let {
+        _out_gain,
+        freq
+      } = this;
+      let {
+        synth
+      } = this.data;
+      let {
+        wave,
+        volume,
+        cutoff,
+        cutoff_max,
+        amplitude,
+        filter_adsr,
+        amp_adsr
+      } = synth;
+      let osc1 = getOscillator(context, wave, 15);
+      this.osc1 = osc1;
+      let osc2 = getOscillator(context, wave, -15);
+      this.osc2 = osc2;
+      let osc1_mix = context.createGain();
+      let osc2_mix = context.createGain();
+      osc1.connect(osc1_mix);
+      osc2.connect(osc2_mix);
+      osc1_mix.gain.setValueAtTime(1, now);
+      osc2_mix.gain.setValueAtTime(1, now);
+      let filter = new BiquadFilterNode(context, {
+        type: 'lowpass',
+        Q: 6
+      });
+      this.filter = filter;
+      osc1_mix.connect(filter);
+      osc2_mix.connect(filter);
+
+      _out_gain.gain.setValueAtTime(volume, now);
+
+      osc1.frequency.setValueAtTime(freq, now);
+      osc2.frequency.setValueAtTime(freq, now);
+      let envelope = new GainNode(context);
+      this.envelope = envelope;
+      filter.connect(envelope);
+      envelope.connect(_out_gain);
+      let _filter_adsr = { ...filter_adsr,
+        s: cutoff * maxFilterFreq * 0.4 + filter_adsr.s * cutoff_max * maxFilterFreq * 0.6
+      };
+      ads(filter.frequency, now, _filter_adsr, cutoff * maxFilterFreq * 0.4, cutoff * maxFilterFreq * 0.4 + cutoff_max * maxFilterFreq * 0.6);
+      ads(envelope.gain, now, amp_adsr, 0, amplitude);
+      osc1.start(now);
+      osc2.start(now);
+    }
+
+    _release(now = this.context.currentTime) {
+      let {
+        synth: {
+          cutoff,
+          filter_adsr,
+          amp_adsr
+        }
+      } = this.data;
+      r(this.envelope.gain, now, amp_adsr, 0);
+      r(this.filter.frequency, now, filter_adsr, cutoff * this.maxFilterFreq * 0.4);
+      let {
+        a,
+        r: _r
+      } = amp_adsr;
+      this.osc1.stop(now + a + _r);
+      this.osc2.stop(now + a + _r);
+    }
+
+  }
+
+  function make_ref() {
+    let _$ref = createSignal$1();
+
+    let _$clear_bounds = createSignal$1(undefined, {
+      equals: false
+    });
+
+    let _top = createMemo$1(() => {
+      read(_$clear_bounds);
+      return read(_$ref)?.scrollTop;
+    });
+
+    createMemo$1(() => {
+      let top = read(_top);
+
+      if (top !== undefined) {
+        return Vec2.make(0, top);
+      }
+    });
+    let m_rect = createMemo$1(() => {
+      read(_$clear_bounds);
+      return read(_$ref)?.getBoundingClientRect();
+    });
+    let m_orig = createMemo$1(() => {
+      let rect = m_rect();
+
+      if (rect) {
+        return Vec2.make(rect.x, rect.y);
+      }
+    });
+    let m_size = createMemo$1(() => {
+      let rect = m_rect();
+
+      if (rect) {
+        return Vec2.make(rect.width, rect.height);
+      }
+    });
+    return {
+      $clear_bounds() {
+        owrite(_$clear_bounds);
+      },
+
+      get $ref() {
+        return read(_$ref);
+      },
+
+      set $ref($ref) {
+        owrite(_$ref, $ref);
+      },
+
+      get rect() {
+        return m_rect();
+      },
+
+      get orig() {
+        return m_orig();
+      },
+
+      get size() {
+        return m_size();
+      },
+
+      get_normal_at_abs_pos(vs) {
+        let size = m_size(),
+            orig = m_orig();
+
+        if (!!size && !!orig) {
+          return vs.sub(orig).div(size);
+        }
+      }
+
+    };
+  }
+
+  const has_context = (() => {
+    let _;
+
+    return {
+      get context() {
+        if (!_) {
+          _ = new AudioContext();
+        }
+
+        return _;
+      }
+
+    };
+  })();
+
+  const getPlayerController = async input => {
+    if (input) {
+      let srcs = {};
+      short_range_flat_notes.forEach(n => srcs[n] = `${n}.mp3`);
+      let p = new SamplesPlayer(has_context.context);
+      await p.init({
+        srcs,
+        base_url: 'assets/audio/'
+      });
+      return p;
+    }
+  };
+
+  const getOscPlayers = async input => {
+    if (input) {
+      let o = new OscPlayers(has_context.context);
+      await o.init();
+      return o;
+    }
+  };
+
+  class Solsido {
+    onClick() {//owrite(this._user_click, true)
+    }
+
+    onScroll() {
+      this.ref.$clear_bounds();
+    }
+
+    user_click() {
+      owrite(this._user_click, true);
+    }
+
+    get osc_player() {
+      return read(this.r_opc);
+    }
+
+    get player() {
+      return read(this.r_pc);
+    }
+
+    constructor() {
+      this._user_click = createSignal$1(false);
+      this.r_pc = createResource(this._user_click[0], getPlayerController);
+      this.r_opc = createResource(this._user_click[0], getOscPlayers);
+      this.ref = make_ref();
+    }
+
+  }
+
+  const SolsidoContext = createContext();
+  function SolsidoProvider(props) {
+    let solsido = new Solsido(props.options);
+    return createComponent$1(SolsidoContext.Provider, {
+      value: solsido,
+
+      get children() {
+        return props.children;
+      }
+
+    });
+  }
+  const useSolsido = () => useContext(SolsidoContext);
+
+  const rate = 1000 / 60;
+  const ticks = {
+    seconds: 60 * rate,
+    half: 30 * rate,
+    thirds: 20 * rate,
+    lengths: 15 * rate,
+    sixth: 10 * rate,
+    five: 5 * rate,
+    three: 3 * rate,
+    one: 1 * rate
+  };
+
+  class JPR {
+    _just_on = false;
+    _just_off = false;
+    _been_on = undefined;
+
+    get just_on() {
+      return this._just_on;
+    }
+
+    get been_on() {
+      return this._been_on;
+    }
+
+    get just_off() {
+      return this._just_off;
+    }
+
+    _on() {
+      this._just_on = true;
+    }
+
+    _off() {
+      this._just_off = true;
+    }
+
+    update(dt, dt0) {
+      if (this._been_on !== undefined) {
+        this._been_on += dt;
+      }
+
+      if (this._just_on) {
+        this._just_on = false;
+        this._been_on = 0;
+      }
+
+      if (this._just_off) {
+        this._just_off = false;
+        this._been_on = undefined;
+      }
+    }
+
+  }
+
+  class Midi {
+    clear() {
+      this._jpr = new Map();
+    }
+
+    _jpr = new Map();
+
+    get just_ons() {
+      let {
+        _jpr
+      } = this;
+      return [..._jpr.keys()].filter(_ => _jpr.get(_).just_on);
+    }
+
+    get been_ons() {
+      let {
+        _jpr
+      } = this;
+      return [..._jpr.keys()].filter(_ => _jpr.get(_).been_on !== undefined).map(_ => [_, _jpr.get(_).been_on]);
+    }
+
+    get just_offs() {
+      let {
+        _jpr
+      } = this;
+      return [..._jpr.keys()].filter(_ => _jpr.get(_).just_off);
+    }
+
+    noteOn(note, velocity) {
+      if (!this._jpr.has(note)) {
+        this._jpr.set(note, new JPR());
+      }
+
+      this._jpr.get(note)._on();
+    }
+
+    noteOff(note) {
+      if (!this._jpr.has(note)) {
+        this._jpr.set(note, new JPR());
+      }
+
+      this._jpr.get(note)._off();
+    }
+
+    update(dt, dt0) {
+      for (let [key, value] of this._jpr) {
+        value.update(dt, dt0);
+      }
+    }
+
+    init() {
+      const noteOn = (note, velocity) => {
+        if (velocity === 0) {
+          noteOff(note);
+          return;
+        }
+
+        this.noteOn(note, velocity);
+      };
+
+      const noteOff = note => {
+        this.noteOff(note);
+      };
+
+      const onMIDIMessage = message => {
+        let data = message.data;
+        data[0] >> 4;
+            data[0] & 0xf;
+            let type = data[0] & 0xf0,
+            note = data[1],
+            velocity = data[2];
+
+        switch (type) {
+          case 144:
+            // noteOn
+            noteOn(note, velocity);
+            break;
+
+          case 128:
+            // noteOff
+            noteOff(note);
+            break;
+        }
+      };
+
+      const onMIDISuccess = midiAccess => {
+        let midi = midiAccess;
+        let inputs = midi.inputs.values();
+
+        for (let input = inputs.next(); input && !input.done; input = inputs.next()) {
+          input.value.onmidimessage = onMIDIMessage;
+        }
+      };
+
+      navigator.requestMIDIAccess({
+        sysex: true
+      }).then(onMIDISuccess);
+      return this;
+    }
+
+  }
+
+  let midi = new Midi().init();
+  const make_midi = hooks => {
+    midi.clear();
+    let clear = loop((dt, dt0) => {
+      let {
+        just_ons,
+        just_offs
+      } = midi;
+
+      if (just_ons.length > 0) {
+        hooks.just_ons(just_ons.map(_ => _));
+      }
+
+      if (just_offs.length > 0) {
+        hooks.just_offs(just_offs.map(_ => _));
+      }
+
+      midi.update(dt, dt0);
+    });
+    return {
+      dispose() {
+        midi.clear();
+        clear();
+      }
+
+    };
+  };
 
   const make_storage = storage => {
     let api = {
@@ -3086,36 +5997,18 @@ var Lado = (function () {
     return _;
   };
 
-  const getPlayerController = async input => {
-    if (input) {
-      let srcs = {};
-      short_range_flat_notes.forEach(n => srcs[n] = `${n}.mp3`);
-      let p = new SamplesPlayer();
-      await p.init({
-        srcs,
-        base_url: 'assets/audio/'
-      });
-      return p;
-    }
-  };
-
-  class Solsido {
-    onClick() {//owrite(this._user_click, true)
-    }
-
-    onScroll() {
-      this.ref.$clear_bounds();
-    }
-
+  class Sol_Key {
     get player() {
-      return read$1(this.r_pc);
+      return read(this.solsido.r_pc);
     }
 
-    constructor() {
-      this._user_click = createSignal$1(false);
-      this.r_pc = createResource(this._user_click[0], getPlayerController);
-      this.ref = make_ref$1();
-      this._exercises = make_exercises(this);
+    user_click() {
+      this.solsido.user_click();
+    }
+
+    constructor(solsido) {
+      this.solsido = solsido;
+      this._exercises = make_exercises$1(this);
       this._majors = make_majors(this);
       this.major_playback = make_playback$1(this);
       this.major_you = make_you(this);
@@ -3183,17 +6076,17 @@ var Lado = (function () {
     let _time = createSignal$1(0);
 
     let cancel = loop((dt, dt0) => {
-      owrite$1(_time, _ => _ += dt);
+      owrite(_time, _ => _ += dt);
     });
     let m_red_score = createMemo$1(() => {
-      let red_time = read$1(_red_time);
+      let red_time = read(_red_time);
 
       if (red_time) {
-        return read$1(_time) - red_time < ticks.half;
+        return read(_time) - red_time < ticks.half;
       }
     });
     let m_time = createMemo$1(() => {
-      let _ = read$1(_time);
+      let _ = read(_time);
 
       let res = time === 0 ? Math.max(0, ticks.seconds * 120 - _) : _;
       return res / 1000;
@@ -3208,7 +6101,7 @@ var Lado = (function () {
 
     let _key = createSignal$1(next_key());
 
-    let m_majorKey = createMemo$1(() => majorKey(read$1(_key)));
+    let m_majorKey = createMemo$1(() => majorKey(read(_key)));
     let m__ns = createMemo$1(() => scale_in_notes(m_majorKey().scale));
     let m__ks = createMemo$1(() => key_signatures(m_majorKey().keySignature));
     let m_i_wnote = createMemo$1(() => m__ks().length);
@@ -3220,14 +6113,14 @@ var Lado = (function () {
       equals: false
     });
 
-    let m_playing_bras = createMemo$1(() => read$1(_correct_notes).map((no_flat_note, i) => `whole_note,live@${i * m_gap_note() + m_i_wnote() * 0.3 + 1.5},${note_bra_y(no_flat_note) * 0.125}`));
+    let m_playing_bras = createMemo$1(() => read(_correct_notes).map((no_flat_note, i) => `whole_note,live@${i * m_gap_note() + m_i_wnote() * 0.3 + 1.5},${note_bra_y(no_flat_note) * 0.125}`));
     let self = {
       get result() {
-        return read$1(_result);
+        return read(_result);
       },
 
       get score() {
-        return read$1(_score);
+        return read(_score);
       },
 
       get score_klass() {
@@ -3243,7 +6136,7 @@ var Lado = (function () {
       },
 
       set playing_note(note) {
-        owrite$1(_playing_note, note);
+        owrite(_playing_note, note);
       },
 
       get bras() {
@@ -3269,18 +6162,18 @@ var Lado = (function () {
     };
     createEffect(on(_correct_notes[0], v => {
       if (v.length === 8) {
-        let _n = next_key(read$1(_key));
+        let _n = next_key(read(_key));
 
         if (_n) {
-          owrite$1(_score, _ => _ + 1);
-          owrite$1(_key, _n);
-          owrite$1(_correct_notes, []);
+          owrite(_score, _ => _ + 1);
+          owrite(_key, _n);
+          owrite(_correct_notes, []);
         }
       }
     }));
     createEffect(on(_playing_note[0], (note, p) => {
       if (!p && !!note) {
-        let _ = m_notes()[read$1(_correct_notes).length];
+        let _ = m_notes()[read(_correct_notes).length];
 
         let correct = (_ === note || enharmonic(_) === note) && _;
 
@@ -3289,26 +6182,26 @@ var Lado = (function () {
           let no_flat_note = _note[0] + _note[_note.length - 1];
           write(_correct_notes, _ => _.push(no_flat_note));
         } else {
-          owrite$1(_red_time, read$1(_time));
-          owrite$1(_correct_notes, []);
+          owrite(_red_time, read(_time));
+          owrite(_correct_notes, []);
         }
       }
     }));
     createEffect(on(m_time, (t, p) => {
       if (t - p < 0 && t === 0) {
-        let __high = read$1(_high);
+        let __high = read(_high);
 
-        let score = read$1(_score);
+        let score = read(_score);
         let high = Math.max(__high, score);
-        owrite$1(_result, high);
-        owrite$1(_high, _ => high);
+        owrite(_result, high);
+        owrite(_high, _ => high);
         solsido.major_you.stop_major(self);
       }
     }));
     return self;
   };
 
-  const make_exercises = solsido => {
+  const make_exercises$1 = solsido => {
     let _explanations = createSignal$1(true);
 
     let _time = createLocal('time', 0),
@@ -3319,7 +6212,7 @@ var Lado = (function () {
     let _current = createSignal$1();
 
     let m_current = createMemo$1(() => {
-      let current = read$1(_current);
+      let current = read(_current);
 
       if (current) {
         return make_current(solsido, current);
@@ -3334,10 +6227,10 @@ var Lado = (function () {
         }
       }
     }));
-    let m_dton = createMemo$1(() => [read$1(_time), read$1(_order), read$1(_nb), read$1(_hints)]);
+    let m_dton = createMemo$1(() => [read(_time), read(_order), read(_nb), read(_hints)]);
     return {
       get explanations() {
-        return read$1(_explanations);
+        return read(_explanations);
       },
 
       get dton() {
@@ -3349,17 +6242,17 @@ var Lado = (function () {
       },
 
       start(opts) {
-        owrite$1(_explanations, false);
-        owrite$1(_time, opts[0]);
-        owrite$1(_order, opts[1]);
-        owrite$1(_nb, opts[2]);
-        owrite$1(_hints, opts[3]);
-        owrite$1(solsido._user_click, true);
-        owrite$1(_current, opts);
+        owrite(_explanations, false);
+        owrite(_time, opts[0]);
+        owrite(_order, opts[1]);
+        owrite(_nb, opts[2]);
+        owrite(_hints, opts[3]);
+        owrite(_current, opts);
+        solsido.user_click();
       },
 
       cancel() {
-        owrite$1(_current, undefined);
+        owrite(_current, undefined);
       }
 
     };
@@ -3404,11 +6297,11 @@ var Lado = (function () {
     }));
     return {
       play_major(major) {
-        owrite$1(_major, major);
+        owrite(_major, major);
       },
 
       stop_major(major) {
-        owrite$1(_major, _ => _ === major ? undefined : _);
+        owrite(_major, _ => _ === major ? undefined : _);
       }
 
     };
@@ -3461,11 +6354,11 @@ var Lado = (function () {
     }));
     return {
       play_major(major) {
-        owrite$1(_major, major);
+        owrite(_major, major);
       },
 
       stop_major(major) {
-        owrite$1(_major, _ => _ === major ? undefined : _);
+        owrite(_major, _ => _ === major ? undefined : _);
       }
 
     };
@@ -3519,12 +6412,12 @@ var Lado = (function () {
 
     let _xwi = createSignal$1('0,0,0');
 
-    let m_klass = createMemo$1(() => [read$1(_you) ? 'you' : '', read$1(_playback) ? 'playback' : '']);
+    let m_klass = createMemo$1(() => [read(_you) ? 'you' : '', read(_playback) ? 'playback' : '']);
 
     let _playing_note = createSignal$1();
 
     let _bras_playing = createMemo$1(() => {
-      let note = read$1(_playing_note);
+      let note = read(_playing_note);
 
       if (!note) {
         return [];
@@ -3558,7 +6451,7 @@ var Lado = (function () {
       },
 
       set playing_note(note) {
-        owrite$1(_playing_note, note);
+        owrite(_playing_note, note);
       },
 
       xw_at(x) {
@@ -3578,47 +6471,47 @@ var Lado = (function () {
       },
 
       get play_mode() {
-        return read$1(_playback) ? 'stop' : 'play';
+        return read(_playback) ? 'stop' : 'play';
       },
 
       get you_mode() {
-        return read$1(_you) ? 'stop' : 'you';
+        return read(_you) ? 'stop' : 'you';
       },
 
       set_play(v) {
-        owrite$1(_playback, _ => v ? !_ : false);
+        owrite(_playback, _ => v ? !_ : false);
       },
 
       set_you(v) {
-        owrite$1(_you, _ => v ? !_ : false);
+        owrite(_you, _ => v ? !_ : false);
       },
 
       click_play() {
-        owrite$1(solsido._user_click, true);
+        solsido.user_click();
 
         solsido._majors.majors.forEach(_ => _.set_play(_ === this));
       },
 
       click_you() {
-        owrite$1(solsido._user_click, true);
+        solsido.user_click();
 
         solsido._majors.majors.forEach(_ => _.set_you(_ === this));
       },
 
       get you() {
-        return read$1(_you);
+        return read(_you);
       },
 
       get playback() {
-        return read$1(_playback);
+        return read(_playback);
       },
 
       set xwi(xwi) {
-        owrite$1(_xwi, xwi);
+        owrite(_xwi, xwi);
       },
 
       get xwi() {
-        return read$1(_xwi);
+        return read(_xwi);
       }
 
     };
@@ -3666,1669 +6559,38 @@ var Lado = (function () {
     };
   };
 
-  const sharedConfig = {};
-
-  const equalFn = (a, b) => a === b;
-  const $TRACK = Symbol("solid-track");
-  const signalOptions = {
-    equals: equalFn
-  };
-  let runEffects = runQueue;
-  const NOTPENDING = {};
-  const STALE = 1;
-  const PENDING = 2;
-  const UNOWNED = {
-    owned: null,
-    cleanups: null,
-    context: null,
-    owner: null
-  };
-  var Owner = null;
-  let Transition = null;
-  let Listener = null;
-  let Pending = null;
-  let Updates = null;
-  let Effects = null;
-  let ExecCount = 0;
-  function createRoot(fn, detachedOwner) {
-    const listener = Listener,
-          owner = Owner,
-          unowned = fn.length === 0,
-          root = unowned && !false ? UNOWNED : {
-      owned: null,
-      cleanups: null,
-      context: null,
-      owner: detachedOwner || owner
-    },
-          updateFn = unowned ? fn : () => fn(() => cleanNode(root));
-    Owner = root;
-    Listener = null;
-    try {
-      return runUpdates(updateFn, true);
-    } finally {
-      Listener = listener;
-      Owner = owner;
-    }
-  }
-  function createSignal(value, options) {
-    options = options ? Object.assign({}, signalOptions, options) : signalOptions;
-    const s = {
-      value,
-      observers: null,
-      observerSlots: null,
-      pending: NOTPENDING,
-      comparator: options.equals || undefined
-    };
-    const setter = value => {
-      if (typeof value === "function") {
-        value = value(s.pending !== NOTPENDING ? s.pending : s.value);
-      }
-      return writeSignal(s, value);
-    };
-    return [readSignal.bind(s), setter];
-  }
-  function createRenderEffect(fn, value, options) {
-    const c = createComputation(fn, value, false, STALE);
-    updateComputation(c);
-  }
-  function createMemo(fn, value, options) {
-    options = options ? Object.assign({}, signalOptions, options) : signalOptions;
-    const c = createComputation(fn, value, true, 0);
-    c.pending = NOTPENDING;
-    c.observers = null;
-    c.observerSlots = null;
-    c.comparator = options.equals || undefined;
-    updateComputation(c);
-    return readSignal.bind(c);
-  }
-  function batch(fn) {
-    if (Pending) return fn();
-    let result;
-    const q = Pending = [];
-    try {
-      result = fn();
-    } finally {
-      Pending = null;
-    }
-    runUpdates(() => {
-      for (let i = 0; i < q.length; i += 1) {
-        const data = q[i];
-        if (data.pending !== NOTPENDING) {
-          const pending = data.pending;
-          data.pending = NOTPENDING;
-          writeSignal(data, pending);
-        }
-      }
-    }, false);
-    return result;
-  }
-  function untrack(fn) {
-    let result,
-        listener = Listener;
-    Listener = null;
-    result = fn();
-    Listener = listener;
-    return result;
-  }
-  function onCleanup(fn) {
-    if (Owner === null) ;else if (Owner.cleanups === null) Owner.cleanups = [fn];else Owner.cleanups.push(fn);
-    return fn;
-  }
-  function readSignal() {
-    const runningTransition = Transition ;
-    if (this.sources && (this.state || runningTransition )) {
-      const updates = Updates;
-      Updates = null;
-      this.state === STALE || runningTransition  ? updateComputation(this) : lookUpstream(this);
-      Updates = updates;
-    }
-    if (Listener) {
-      const sSlot = this.observers ? this.observers.length : 0;
-      if (!Listener.sources) {
-        Listener.sources = [this];
-        Listener.sourceSlots = [sSlot];
-      } else {
-        Listener.sources.push(this);
-        Listener.sourceSlots.push(sSlot);
-      }
-      if (!this.observers) {
-        this.observers = [Listener];
-        this.observerSlots = [Listener.sources.length - 1];
-      } else {
-        this.observers.push(Listener);
-        this.observerSlots.push(Listener.sources.length - 1);
-      }
-    }
-    return this.value;
-  }
-  function writeSignal(node, value, isComp) {
-    if (Pending) {
-      if (node.pending === NOTPENDING) Pending.push(node);
-      node.pending = value;
-      return value;
-    }
-    if (node.comparator) {
-      if (node.comparator(node.value, value)) return value;
-    }
-    let TransitionRunning = false;
-    node.value = value;
-    if (node.observers && node.observers.length) {
-      runUpdates(() => {
-        for (let i = 0; i < node.observers.length; i += 1) {
-          const o = node.observers[i];
-          if (TransitionRunning && Transition.disposed.has(o)) ;
-          if (TransitionRunning && !o.tState || !TransitionRunning && !o.state) {
-            if (o.pure) Updates.push(o);else Effects.push(o);
-            if (o.observers) markDownstream(o);
-          }
-          if (TransitionRunning) ;else o.state = STALE;
-        }
-        if (Updates.length > 10e5) {
-          Updates = [];
-          if (false) ;
-          throw new Error();
-        }
-      }, false);
-    }
-    return value;
-  }
-  function updateComputation(node) {
-    if (!node.fn) return;
-    cleanNode(node);
-    const owner = Owner,
-          listener = Listener,
-          time = ExecCount;
-    Listener = Owner = node;
-    runComputation(node, node.value, time);
-    Listener = listener;
-    Owner = owner;
-  }
-  function runComputation(node, value, time) {
-    let nextValue;
-    try {
-      nextValue = node.fn(value);
-    } catch (err) {
-      handleError(err);
-    }
-    if (!node.updatedAt || node.updatedAt <= time) {
-      if (node.observers && node.observers.length) {
-        writeSignal(node, nextValue);
-      } else node.value = nextValue;
-      node.updatedAt = time;
-    }
-  }
-  function createComputation(fn, init, pure, state = STALE, options) {
-    const c = {
-      fn,
-      state: state,
-      updatedAt: null,
-      owned: null,
-      sources: null,
-      sourceSlots: null,
-      cleanups: null,
-      value: init,
-      owner: Owner,
-      context: null,
-      pure
-    };
-    if (Owner === null) ;else if (Owner !== UNOWNED) {
-      {
-        if (!Owner.owned) Owner.owned = [c];else Owner.owned.push(c);
-      }
-    }
-    return c;
-  }
-  function runTop(node) {
-    const runningTransition = Transition ;
-    if (node.state === 0 || runningTransition ) return;
-    if (node.state === PENDING || runningTransition ) return lookUpstream(node);
-    if (node.suspense && untrack(node.suspense.inFallback)) return node.suspense.effects.push(node);
-    const ancestors = [node];
-    while ((node = node.owner) && (!node.updatedAt || node.updatedAt < ExecCount)) {
-      if (node.state || runningTransition ) ancestors.push(node);
-    }
-    for (let i = ancestors.length - 1; i >= 0; i--) {
-      node = ancestors[i];
-      if (node.state === STALE || runningTransition ) {
-        updateComputation(node);
-      } else if (node.state === PENDING || runningTransition ) {
-        const updates = Updates;
-        Updates = null;
-        lookUpstream(node, ancestors[0]);
-        Updates = updates;
-      }
-    }
-  }
-  function runUpdates(fn, init) {
-    if (Updates) return fn();
-    let wait = false;
-    if (!init) Updates = [];
-    if (Effects) wait = true;else Effects = [];
-    ExecCount++;
-    try {
-      const res = fn();
-      completeUpdates(wait);
-      return res;
-    } catch (err) {
-      if (!Updates) Effects = null;
-      handleError(err);
-    }
-  }
-  function completeUpdates(wait) {
-    if (Updates) {
-      runQueue(Updates);
-      Updates = null;
-    }
-    if (wait) return;
-    if (Effects.length) batch(() => {
-      runEffects(Effects);
-      Effects = null;
-    });else {
-      Effects = null;
-    }
-  }
-  function runQueue(queue) {
-    for (let i = 0; i < queue.length; i++) runTop(queue[i]);
-  }
-  function lookUpstream(node, ignore) {
-    const runningTransition = Transition ;
-    node.state = 0;
-    for (let i = 0; i < node.sources.length; i += 1) {
-      const source = node.sources[i];
-      if (source.sources) {
-        if (source.state === STALE || runningTransition ) {
-          if (source !== ignore) runTop(source);
-        } else if (source.state === PENDING || runningTransition ) lookUpstream(source, ignore);
-      }
-    }
-  }
-  function markDownstream(node) {
-    const runningTransition = Transition ;
-    for (let i = 0; i < node.observers.length; i += 1) {
-      const o = node.observers[i];
-      if (!o.state || runningTransition ) {
-        o.state = PENDING;
-        if (o.pure) Updates.push(o);else Effects.push(o);
-        o.observers && markDownstream(o);
-      }
-    }
-  }
-  function cleanNode(node) {
-    let i;
-    if (node.sources) {
-      while (node.sources.length) {
-        const source = node.sources.pop(),
-              index = node.sourceSlots.pop(),
-              obs = source.observers;
-        if (obs && obs.length) {
-          const n = obs.pop(),
-                s = source.observerSlots.pop();
-          if (index < obs.length) {
-            n.sourceSlots[s] = index;
-            obs[index] = n;
-            source.observerSlots[index] = s;
-          }
-        }
-      }
-    }
-    if (node.owned) {
-      for (i = 0; i < node.owned.length; i++) cleanNode(node.owned[i]);
-      node.owned = null;
-    }
-    if (node.cleanups) {
-      for (i = 0; i < node.cleanups.length; i++) node.cleanups[i]();
-      node.cleanups = null;
-    }
-    node.state = 0;
-    node.context = null;
-  }
-  function handleError(err) {
-    throw err;
-  }
-
-  const FALLBACK = Symbol("fallback");
-  function dispose(d) {
-    for (let i = 0; i < d.length; i++) d[i]();
-  }
-  function mapArray(list, mapFn, options = {}) {
-    let items = [],
-        mapped = [],
-        disposers = [],
-        len = 0,
-        indexes = mapFn.length > 1 ? [] : null;
-    onCleanup(() => dispose(disposers));
-    return () => {
-      let newItems = list() || [],
-          i,
-          j;
-      newItems[$TRACK];
-      return untrack(() => {
-        let newLen = newItems.length,
-            newIndices,
-            newIndicesNext,
-            temp,
-            tempdisposers,
-            tempIndexes,
-            start,
-            end,
-            newEnd,
-            item;
-        if (newLen === 0) {
-          if (len !== 0) {
-            dispose(disposers);
-            disposers = [];
-            items = [];
-            mapped = [];
-            len = 0;
-            indexes && (indexes = []);
-          }
-          if (options.fallback) {
-            items = [FALLBACK];
-            mapped[0] = createRoot(disposer => {
-              disposers[0] = disposer;
-              return options.fallback();
-            });
-            len = 1;
-          }
-        }
-        else if (len === 0) {
-          mapped = new Array(newLen);
-          for (j = 0; j < newLen; j++) {
-            items[j] = newItems[j];
-            mapped[j] = createRoot(mapper);
-          }
-          len = newLen;
-        } else {
-          temp = new Array(newLen);
-          tempdisposers = new Array(newLen);
-          indexes && (tempIndexes = new Array(newLen));
-          for (start = 0, end = Math.min(len, newLen); start < end && items[start] === newItems[start]; start++);
-          for (end = len - 1, newEnd = newLen - 1; end >= start && newEnd >= start && items[end] === newItems[newEnd]; end--, newEnd--) {
-            temp[newEnd] = mapped[end];
-            tempdisposers[newEnd] = disposers[end];
-            indexes && (tempIndexes[newEnd] = indexes[end]);
-          }
-          newIndices = new Map();
-          newIndicesNext = new Array(newEnd + 1);
-          for (j = newEnd; j >= start; j--) {
-            item = newItems[j];
-            i = newIndices.get(item);
-            newIndicesNext[j] = i === undefined ? -1 : i;
-            newIndices.set(item, j);
-          }
-          for (i = start; i <= end; i++) {
-            item = items[i];
-            j = newIndices.get(item);
-            if (j !== undefined && j !== -1) {
-              temp[j] = mapped[i];
-              tempdisposers[j] = disposers[i];
-              indexes && (tempIndexes[j] = indexes[i]);
-              j = newIndicesNext[j];
-              newIndices.set(item, j);
-            } else disposers[i]();
-          }
-          for (j = start; j < newLen; j++) {
-            if (j in temp) {
-              mapped[j] = temp[j];
-              disposers[j] = tempdisposers[j];
-              if (indexes) {
-                indexes[j] = tempIndexes[j];
-                indexes[j](j);
-              }
-            } else mapped[j] = createRoot(mapper);
-          }
-          mapped = mapped.slice(0, len = newLen);
-          items = newItems.slice(0);
-        }
-        return mapped;
+  const _tmpl$$3 = /*#__PURE__*/template$1(`<div></div>`);
+  const _VStaff = props => {
+    let $ref;
+    onMount(() => {
+      let api = VStaff($ref);
+      createEffect(() => {
+        api.bras = props.bras;
       });
-      function mapper(disposer) {
-        disposers[j] = disposer;
-        if (indexes) {
-          const [s, set] = createSignal(j);
-          indexes[j] = set;
-          return mapFn(newItems[j], s);
-        }
-        return mapFn(newItems[j]);
-      }
-    };
-  }
-  function createComponent(Comp, props) {
-    return untrack(() => Comp(props || {}));
-  }
-
-  function For(props) {
-    const fallback = "fallback" in props && {
-      fallback: () => props.fallback
-    };
-    return createMemo(mapArray(() => props.each, props.children, fallback ? fallback : undefined));
-  }
-  function Show(props) {
-    let strictEqual = false;
-    const condition = createMemo(() => props.when, undefined, {
-      equals: (a, b) => strictEqual ? a === b : !a === !b
-    });
-    return createMemo(() => {
-      const c = condition();
-      if (c) {
-        const child = props.children;
-        return (strictEqual = typeof child === "function" && child.length > 0) ? untrack(() => child(c)) : child;
-      }
-      return props.fallback;
-    });
-  }
-
-  function reconcileArrays(parentNode, a, b) {
-    let bLength = b.length,
-        aEnd = a.length,
-        bEnd = bLength,
-        aStart = 0,
-        bStart = 0,
-        after = a[aEnd - 1].nextSibling,
-        map = null;
-    while (aStart < aEnd || bStart < bEnd) {
-      if (a[aStart] === b[bStart]) {
-        aStart++;
-        bStart++;
-        continue;
-      }
-      while (a[aEnd - 1] === b[bEnd - 1]) {
-        aEnd--;
-        bEnd--;
-      }
-      if (aEnd === aStart) {
-        const node = bEnd < bLength ? bStart ? b[bStart - 1].nextSibling : b[bEnd - bStart] : after;
-        while (bStart < bEnd) parentNode.insertBefore(b[bStart++], node);
-      } else if (bEnd === bStart) {
-        while (aStart < aEnd) {
-          if (!map || !map.has(a[aStart])) a[aStart].remove();
-          aStart++;
-        }
-      } else if (a[aStart] === b[bEnd - 1] && b[bStart] === a[aEnd - 1]) {
-        const node = a[--aEnd].nextSibling;
-        parentNode.insertBefore(b[bStart++], a[aStart++].nextSibling);
-        parentNode.insertBefore(b[--bEnd], node);
-        a[aEnd] = b[bEnd];
-      } else {
-        if (!map) {
-          map = new Map();
-          let i = bStart;
-          while (i < bEnd) map.set(b[i], i++);
-        }
-        const index = map.get(a[aStart]);
-        if (index != null) {
-          if (bStart < index && index < bEnd) {
-            let i = aStart,
-                sequence = 1,
-                t;
-            while (++i < aEnd && i < bEnd) {
-              if ((t = map.get(a[i])) == null || t !== index + sequence) break;
-              sequence++;
-            }
-            if (sequence > index - bStart) {
-              const node = a[aStart];
-              while (bStart < index) parentNode.insertBefore(b[bStart++], node);
-            } else parentNode.replaceChild(b[bStart++], a[aStart++]);
-          } else aStart++;
-        } else a[aStart++].remove();
-      }
-    }
-  }
-  function render(code, element, init) {
-    let disposer;
-    createRoot(dispose => {
-      disposer = dispose;
-      element === document ? code() : insert(element, code(), element.firstChild ? null : undefined, init);
-    });
-    return () => {
-      disposer();
-      element.textContent = "";
-    };
-  }
-  function template(html, check, isSVG) {
-    const t = document.createElement("template");
-    t.innerHTML = html;
-    let node = t.content.firstChild;
-    if (isSVG) node = node.firstChild;
-    return node;
-  }
-  function setAttribute(node, name, value) {
-    if (value == null) node.removeAttribute(name);else node.setAttribute(name, value);
-  }
-  function className(node, value) {
-    if (value == null) node.removeAttribute("class");else node.className = value;
-  }
-  function style(node, value, prev = {}) {
-    const nodeStyle = node.style;
-    const prevString = typeof prev === "string";
-    if (value == null && prevString || typeof value === "string") return nodeStyle.cssText = value;
-    prevString && (nodeStyle.cssText = undefined, prev = {});
-    value || (value = {});
-    let v, s;
-    for (s in prev) {
-      value[s] == null && nodeStyle.removeProperty(s);
-      delete prev[s];
-    }
-    for (s in value) {
-      v = value[s];
-      if (v !== prev[s]) {
-        nodeStyle.setProperty(s, v);
-        prev[s] = v;
-      }
-    }
-    return prev;
-  }
-  function insert(parent, accessor, marker, initial) {
-    if (marker !== undefined && !initial) initial = [];
-    if (typeof accessor !== "function") return insertExpression(parent, accessor, initial, marker);
-    createRenderEffect(current => insertExpression(parent, accessor(), current, marker), initial);
-  }
-  function insertExpression(parent, value, current, marker, unwrapArray) {
-    if (sharedConfig.context && !current) current = [...parent.childNodes];
-    while (typeof current === "function") current = current();
-    if (value === current) return current;
-    const t = typeof value,
-          multi = marker !== undefined;
-    parent = multi && current[0] && current[0].parentNode || parent;
-    if (t === "string" || t === "number") {
-      if (sharedConfig.context) return current;
-      if (t === "number") value = value.toString();
-      if (multi) {
-        let node = current[0];
-        if (node && node.nodeType === 3) {
-          node.data = value;
-        } else node = document.createTextNode(value);
-        current = cleanChildren(parent, current, marker, node);
-      } else {
-        if (current !== "" && typeof current === "string") {
-          current = parent.firstChild.data = value;
-        } else current = parent.textContent = value;
-      }
-    } else if (value == null || t === "boolean") {
-      if (sharedConfig.context) return current;
-      current = cleanChildren(parent, current, marker);
-    } else if (t === "function") {
-      createRenderEffect(() => {
-        let v = value();
-        while (typeof v === "function") v = v();
-        current = insertExpression(parent, v, current, marker);
+      createEffect(() => {
+        api.xwi = props.xwi || '';
       });
-      return () => current;
-    } else if (Array.isArray(value)) {
-      const array = [];
-      const currentArray = current && Array.isArray(current);
-      if (normalizeIncomingArray(array, value, current, unwrapArray)) {
-        createRenderEffect(() => current = insertExpression(parent, array, current, marker, true));
-        return () => current;
-      }
-      if (sharedConfig.context) {
-        for (let i = 0; i < array.length; i++) {
-          if (array[i].parentNode) return current = array;
-        }
-      }
-      if (array.length === 0) {
-        current = cleanChildren(parent, current, marker);
-        if (multi) return current;
-      } else if (currentArray) {
-        if (current.length === 0) {
-          appendNodes(parent, array, marker);
-        } else reconcileArrays(parent, current, array);
-      } else {
-        current && cleanChildren(parent);
-        appendNodes(parent, array);
-      }
-      current = array;
-    } else if (value instanceof Node) {
-      if (sharedConfig.context && value.parentNode) return current = multi ? [value] : value;
-      if (Array.isArray(current)) {
-        if (multi) return current = cleanChildren(parent, current, marker, value);
-        cleanChildren(parent, current, null, value);
-      } else if (current == null || current === "" || !parent.firstChild) {
-        parent.appendChild(value);
-      } else parent.replaceChild(value, parent.firstChild);
-      current = value;
-    } else ;
-    return current;
-  }
-  function normalizeIncomingArray(normalized, array, current, unwrap) {
-    let dynamic = false;
-    for (let i = 0, len = array.length; i < len; i++) {
-      let item = array[i],
-          prev = current && current[i];
-      if (item instanceof Node) {
-        normalized.push(item);
-      } else if (item == null || item === true || item === false) ; else if (Array.isArray(item)) {
-        dynamic = normalizeIncomingArray(normalized, item, prev) || dynamic;
-      } else if ((typeof item) === "function") {
-        if (unwrap) {
-          while (typeof item === "function") item = item();
-          dynamic = normalizeIncomingArray(normalized, Array.isArray(item) ? item : [item], prev) || dynamic;
-        } else {
-          normalized.push(item);
-          dynamic = true;
-        }
-      } else {
-        const value = String(item);
-        if (prev && prev.nodeType === 3 && prev.data === value) {
-          normalized.push(prev);
-        } else normalized.push(document.createTextNode(value));
-      }
-    }
-    return dynamic;
-  }
-  function appendNodes(parent, array, marker) {
-    for (let i = 0, len = array.length; i < len; i++) parent.insertBefore(array[i], marker);
-  }
-  function cleanChildren(parent, current, marker, replacement) {
-    if (marker === undefined) return parent.textContent = "";
-    const node = replacement || document.createTextNode("");
-    if (current.length) {
-      let inserted = false;
-      for (let i = current.length - 1; i >= 0; i--) {
-        const el = current[i];
-        if (node !== el) {
-          const isParent = el.parentNode === parent;
-          if (!inserted && !i) isParent ? parent.replaceChild(node, el) : parent.insertBefore(node, marker);else isParent && el.remove();
-        } else inserted = true;
-      }
-    } else parent.insertBefore(node, marker);
-    return [node];
-  }
-
-  class Vec2 {
-    static from_angle = n => new Vec2(Math.cos(n), Math.sin(n));
-    static make = (x, y) => new Vec2(x, y);
-
-    static get unit() {
-      return new Vec2(1, 1);
-    }
-
-    static get zero() {
-      return new Vec2(0, 0);
-    }
-
-    get vs() {
-      return [this.x, this.y];
-    }
-
-    get mul_inverse() {
-      return new Vec2(1 / this.x, 1 / this.y);
-    }
-
-    get inverse() {
-      return new Vec2(-this.x, -this.y);
-    }
-
-    get half() {
-      return new Vec2(this.x / 2, this.y / 2);
-    }
-
-    get length_squared() {
-      return this.x * this.x + this.y * this.y;
-    }
-
-    get length() {
-      return Math.sqrt(this.length_squared);
-    }
-
-    get normalize() {
-      if (this.length === 0) {
-        return Vec2.zero;
-      }
-
-      return this.scale(1 / this.length);
-    }
-
-    get perpendicular() {
-      return new Vec2(-this.y, this.x);
-    }
-
-    equals(v) {
-      return this.x === v.x && this.y === v.y;
-    }
-
-    get clone() {
-      return new Vec2(this.x, this.y);
-    }
-
-    get angle() {
-      return Math.atan2(this.y, this.x);
-    }
-
-    constructor(x, y) {
-      this.x = x;
-      this.y = y;
-    }
-
-    dot(v) {
-      return this.x * v.x + this.y * v.y;
-    }
-
-    cross(v) {
-      return this.x * v.y - this.y * v.x;
-    }
-
-    project_to(v) {
-      let lsq = v.length_squared;
-      let dp = this.dot(v);
-      return Vec2.make(dp * v.x / lsq, dp * v.y / lsq);
-    }
-
-    distance(v) {
-      return this.sub(v).length;
-    }
-
-    addy(n) {
-      return Vec2.make(this.x, this.y + n);
-    }
-
-    add_angle(n) {
-      return Vec2.from_angle(this.angle + n);
-    }
-
-    scale(n) {
-      let {
-        clone
-      } = this;
-      return clone.scale_in(n);
-    }
-
-    scale_in(n) {
-      this.x *= n;
-      this.y *= n;
-      return this;
-    }
-
-    add(v) {
-      let {
-        clone
-      } = this;
-      return clone.add_in(v);
-    }
-
-    add_in(v) {
-      this.x += v.x;
-      this.y += v.y;
-      return this;
-    }
-
-    sub(v) {
-      let {
-        clone
-      } = this;
-      return clone.sub_in(v);
-    }
-
-    sub_in(v) {
-      this.x -= v.x;
-      this.y -= v.y;
-      return this;
-    }
-
-    mul(v) {
-      let {
-        clone
-      } = this;
-      return clone.mul_in(v);
-    }
-
-    mul_in(v) {
-      this.x *= v.x;
-      this.y *= v.y;
-      return this;
-    }
-
-    div(v) {
-      let {
-        clone
-      } = this;
-      return clone.div_in(v);
-    }
-
-    div_in(v) {
-      this.x /= v.x;
-      this.y /= v.y;
-      return this;
-    }
-
-    set_in(x, y = this.y) {
-      this.x = x;
-      this.y = y;
-      return this;
-    }
-
-  }
-
-  function owrite(signal, fn) {
-    if (typeof fn === 'function') {
-      return signal[1](fn);
-    } else {
-      signal[1](_ => fn);
-    }
-  }
-  function read(signal) {
-    if (Array.isArray(signal)) {
-      return signal[0]();
-    } else {
-      return signal();
-    }
-  }
-
-  function make_ref() {
-    let _$ref = createSignal();
-
-    let _$clear_bounds = createSignal(undefined, {
-      equals: false
+      createEffect(() => {
+        api.playback = props.playback;
+      });
     });
-
-    let _top = createMemo(() => {
-      read(_$clear_bounds);
-      return read(_$ref)?.scrollTop;
-    });
-
-    createMemo(() => {
-      let top = read(_top);
-
-      if (top !== undefined) {
-        return Vec2.make(0, top);
-      }
-    });
-    let m_rect = createMemo(() => {
-      read(_$clear_bounds);
-      return read(_$ref)?.getBoundingClientRect();
-    });
-    let m_orig = createMemo(() => {
-      let rect = m_rect();
-
-      if (rect) {
-        return Vec2.make(rect.x, rect.y);
-      }
-    });
-    let m_size = createMemo(() => {
-      let rect = m_rect();
-
-      if (rect) {
-        return Vec2.make(rect.width, rect.height);
-      }
-    });
-    return {
-      $clear_bounds() {
-        owrite(_$clear_bounds);
-      },
-
-      get $ref() {
-        return read(_$ref);
-      },
-
-      set $ref($ref) {
-        owrite(_$ref, $ref);
-      },
-
-      get rect() {
-        return m_rect();
-      },
-
-      get orig() {
-        return m_orig();
-      },
-
-      get size() {
-        return m_size();
-      },
-
-      get_normal_at_abs_pos(vs) {
-        let size = m_size(),
-            orig = m_orig();
-
-        if (!!size && !!orig) {
-          return vs.sub(orig).div(size);
-        }
-      }
-
-    };
-  }
-
-  class Staff {
-    onScroll() {
-      this.ref.$clear_bounds();
-    }
-
-    get style() {
-      return this.m_style();
-    }
-
-    set bras(bras) {
-      this.sheet.bras = bras;
-    }
-
-    get ties() {
-      return this.sheet.ties;
-    }
-
-    get beams() {
-      return this.sheet.beams;
-    }
-
-    get stems() {
-      return this.sheet.stems;
-    }
-
-    get bars() {
-      return this.sheet.bars;
-    }
-
-    get bras() {
-      return this.sheet.bras;
-    }
-
-    get ledgers() {
-      return this.sheet.ledgers;
-    }
-
-    constructor() {
-      this.ref = make_ref();
-      this.m_style = createMemo(() => ({
-        'font-size': `${(this.ref.size?.y || 0) / 4}px`
-      }));
-      this.sheet = make_sheet(this);
-      this.playback = make_playback();
-    }
-
-  }
-
-  const make_playback = solsido => {
-    let _show = createSignal(false);
-
-    let _x = createSignal(1);
-
-    let _w = createSignal(1);
-
-    let _i = createSignal(100);
-
-    let m_style = createMemo(() => ({
-      transform: `translate(${read(_x)}em, 0)`,
-      width: `${read(_w)}em`
-    }));
-    let m_line_style = createMemo(() => ({
-      transform: `translate(${read(_w) * 0.01 * read(_i)}em, 0)`
-    }));
-    return {
-      get show() {
-        if (read(_show)) {
-          return this;
-        }
-      },
-
-      get line_style() {
-        return m_line_style();
-      },
-
-      get style() {
-        return m_style();
-      },
-
-      set_play(v) {
-        owrite(_show, v);
-      },
-
-      set xwi(xwi) {
-        let [x, w, i] = xwi.split(',');
-        owrite(_x, x);
-        owrite(_w, w);
-        owrite(_i, i);
-      }
-
-    };
-  };
-
-  const make_tie = (staff, tie) => {
-    let [klass, o_pos] = tie.split('@');
-    let [x, y, x2] = o_pos.split(',');
-    x2 -= x;
-    x2 *= 100;
-    x2 = 20;
-    const m_style = createMemo(() => ({
-      transform: `translate(${x}em, ${y}em)`
-    }));
-    return {
-      x2,
-      klass,
-
-      get style() {
-        return m_style();
-      }
-
-    };
-  };
-
-  const make_beam = (staff, beam) => {
-    let [_, o_pos] = beam.split('@');
-    let [x, y, y2] = o_pos.split(',');
-    y2 -= y;
-    const m_style = createMemo(() => ({
-      transform: `translate(${x}em, ${y}em)`
-    }));
-    return {
-      get y2() {
-        return y2 * 100;
-      },
-
-      get style() {
-        return m_style();
-      }
-
-    };
-  };
-
-  const make_stem = (staff, stem) => {
-    let [_, o_pos] = stem.split('@');
-    let [x, y, h] = o_pos.split(',');
-    const m_style = createMemo(() => ({
-      transform: `translate(${x}em, ${y}em)`,
-      height: `${h}em`
-    }));
-    return {
-      set xwi(xwi) {
-        let [x, w, i] = xwi.split(',');
-        owrite(_x, x);
-        owrite(_w, w);
-        owrite(_i, i);
-      },
-
-      get style() {
-        return m_style();
-      }
-
-    };
-  };
-
-  const make_bar = (staff, bar) => {
-    let [_, o_pos] = bar.split('@');
-    let [x] = o_pos.split(',');
-    const m_style = createMemo(() => ({
-      transform: `translate(${x}em, 0)`
-    }));
-    return {
-      get style() {
-        return m_style();
-      }
-
-    };
-  };
-
-  const make_ledger = (staff, ledger) => {
-    let [_, o_pos] = ledger.split('@');
-    let [x, y] = o_pos.split(',');
-    const m_style = createMemo(() => ({
-      transform: `translate(${x}em, ${y}em)`
-    }));
-    return {
-      get style() {
-        return m_style();
-      }
-
-    };
-  };
-
-  const make_bra = (staff, bra) => {
-    let [glyph_klass, o_pos] = bra.split('@');
-    let [x, y] = o_pos.split(',');
-    let [glyph, ...klass] = glyph_klass.split(',');
-    const m_style = createMemo(() => ({
-      transform: `translate(${x}em, ${y}em)`
-    }));
-    return {
-      get klass() {
-        return klass.join(' ');
-      },
-
-      get glyph() {
-        return glyph;
-      },
-
-      get style() {
-        return m_style();
-      }
-
-    };
-  };
-
-  const make_sheet = staff => {
-    let _bras = createSignal([]);
-
-    let m_bras = createMemo(mapArray(_bras[0], _ => make_bra(staff, _)));
-
-    let _ledgers = createSignal([]);
-
-    let m_ledgers = createMemo(mapArray(_ledgers[0], _ => make_ledger(staff, _)));
-
-    let _bars = createSignal([]);
-
-    let m_bars = createMemo(mapArray(_bars[0], _ => make_bar(staff, _)));
-
-    let _stems = createSignal([]);
-
-    let m_stems = createMemo(mapArray(_stems[0], _ => make_stem(staff, _)));
-
-    let _beams = createSignal([]);
-
-    let m_beams = createMemo(mapArray(_beams[0], _ => make_beam(staff, _)));
-
-    let _ties = createSignal([]);
-
-    let m_ties = createMemo(mapArray(_ties[0], _ => make_tie(staff, _)));
-    return {
-      set ties(ties) {
-        owrite(_ties, ties);
-      },
-
-      get ties() {
-        return m_ties();
-      },
-
-      set beams(beams) {
-        owrite(_beams, beams);
-      },
-
-      get beams() {
-        return m_beams();
-      },
-
-      set stems(stems) {
-        owrite(_stems, stems);
-      },
-
-      get stems() {
-        return m_stems();
-      },
-
-      set bars(bars) {
-        owrite(_bars, bars);
-      },
-
-      get bars() {
-        return m_bars();
-      },
-
-      get ledgers() {
-        return m_ledgers();
-      },
-
-      set ledgers(ledgers) {
-        owrite(_ledgers, ledgers);
-      },
-
-      get bras() {
-        return m_bras();
-      },
-
-      set bras(bras) {
-        owrite(_bras, bras);
-      }
-
-    };
-  };
-
-  const gclef$1 = '';
-  const bclef$1 = '';
-  const double_note$1 = '';
-  const whole_note$1 = '';
-  const half_note$1 = '';
-  const quarter_note$1 = '';
-  const brace$1 = '';
-  const flat_accidental$1 = '';
-  const natural_accidental$1 = '';
-  const sharp_accidental$1 = '';
-  const dsharp_accidental$1 = '';
-  const dflat_accidental$1 = '';
-  const eighth_flag_up$1 = '';
-  const sixteenth_flag_up$1 = '';
-  const thirtysecond_flag_up$1 = '';
-  const sixtyfourth_flag_up$1 = '';
-  const eighth_flag_down$1 = '';
-  const sixteenth_flag_down$1 = '';
-  const thirtysecond_flag_down$1 = '';
-  const sixtyfourth_flag_down$1 = '';
-  const double_rest$1 = '';
-  const whole_rest$1 = '';
-  const half_rest$1 = '';
-  const quarter_rest$1 = '';
-  const eighth_rest$1 = '';
-  const sixteenth_rest$1 = '';
-  const thirtysecond_rest$1 = '';
-  const sixtyfourth_rest$1 = '';
-  const onetwentyeighth_rest$1 = '';
-  const zero_time$1 = '';
-  const one_time$1 = '';
-  const two_time$1 = '';
-  const three_time$1 = '';
-  const four_time$1 = '';
-  const five_time$1 = '';
-  const six_time$1 = '';
-  const seven_time$1 = '';
-  const eight_time$1 = '';
-  const nine_time$1 = '';
-  const ten_time$1 = one_time$1 + zero_time$1;
-  const twelve_time$1 = one_time$1 + two_time$1;
-  const common_time$1 = '';
-  const cut_time$1 = '';
-  const quarter_text$1 = '';
-  const barline_single$1 = '';
-  const barline_double$1 = '';
-  const barline_final$1 = '';
-  var g$1 = {
-    barline_single: barline_single$1,
-    barline_double: barline_double$1,
-    barline_final: barline_final$1,
-    quarter_text: quarter_text$1,
-    gclef: gclef$1,
-    bclef: bclef$1,
-    double_note: double_note$1,
-    whole_note: whole_note$1,
-    half_note: half_note$1,
-    quarter_note: quarter_note$1,
-    flat_accidental: flat_accidental$1,
-    natural_accidental: natural_accidental$1,
-    sharp_accidental: sharp_accidental$1,
-    dflat_accidental: dflat_accidental$1,
-    dsharp_accidental: dsharp_accidental$1,
-    eighth_flag_up: eighth_flag_up$1,
-    sixteenth_flag_up: sixteenth_flag_up$1,
-    thirtysecond_flag_up: thirtysecond_flag_up$1,
-    sixtyfourth_flag_up: sixtyfourth_flag_up$1,
-    eighth_flag_down: eighth_flag_down$1,
-    sixteenth_flag_down: sixteenth_flag_down$1,
-    thirtysecond_flag_down: thirtysecond_flag_down$1,
-    sixtyfourth_flag_down: sixtyfourth_flag_down$1,
-    eighth_flag_up: eighth_flag_up$1,
-    sixteenth_flag_up: sixteenth_flag_up$1,
-    thirtysecond_flag_up: thirtysecond_flag_up$1,
-    sixtyfourth_flag_up: sixtyfourth_flag_up$1,
-    brace: brace$1,
-    double_rest: double_rest$1,
-    whole_rest: whole_rest$1,
-    half_rest: half_rest$1,
-    quarter_rest: quarter_rest$1,
-    eighth_rest: eighth_rest$1,
-    sixteenth_rest: sixteenth_rest$1,
-    thirtysecond_rest: thirtysecond_rest$1,
-    sixtyfourth_rest: sixtyfourth_rest$1,
-    onetwentyeighth_rest: onetwentyeighth_rest$1,
-    zero_time: zero_time$1,
-    one_time: one_time$1,
-    two_time: two_time$1,
-    three_time: three_time$1,
-    four_time: four_time$1,
-    five_time: five_time$1,
-    six_time: six_time$1,
-    seven_time: seven_time$1,
-    eight_time: eight_time$1,
-    nine_time: nine_time$1,
-    ten_time: ten_time$1,
-    twelve_time: twelve_time$1,
-    common_time: common_time$1,
-    cut_time: cut_time$1
-  };
-
-  const _tmpl$$1 = /*#__PURE__*/template(`<vstaff><staff><lines> <line></line> <line></line> <line></line> <line></line> <line></line> </lines><ledgers></ledgers><bravura></bravura></staff></vstaff>`),
-        _tmpl$2$1 = /*#__PURE__*/template(`<div class="playback"><span class="cursor"><span class="line"></span></span></div>`),
-        _tmpl$3$1 = /*#__PURE__*/template(`<ledger></ledger>`),
-        _tmpl$4$1 = /*#__PURE__*/template(`<bar></bar>`),
-        _tmpl$5$1 = /*#__PURE__*/template(`<stem></stem>`),
-        _tmpl$6$1 = /*#__PURE__*/template(`<bra></bra>`),
-        _tmpl$7$1 = /*#__PURE__*/template(`<tie><svg width="1em" height="1em" viewBox="0 0 100 100"><path></path></svg></tie>`),
-        _tmpl$8$1 = /*#__PURE__*/template(`<beam><svg width="1em" height="1em" viewBox="0 0 100 100"><path></path></svg></beam>`);
-
-  function unbindable$1(el, eventName, callback, options) {
-    el.addEventListener(eventName, callback, options);
-    return () => el.removeEventListener(eventName, callback, options);
-  }
-
-  const App$1 = staff => props => {
-    let unbinds = [];
-    unbinds.push(unbindable$1(document, 'scroll', () => staff.onScroll(), {
-      capture: true,
-      passive: true
-    }));
-    unbinds.push(unbindable$1(window, 'resize', () => staff.onScroll(), {
-      passive: true
-    }));
-    onCleanup(() => unbinds.forEach(_ => _()));
     return (() => {
-      const _el$ = _tmpl$$1.cloneNode(true),
-            _el$2 = _el$.firstChild,
-            _el$3 = _el$2.firstChild,
-            _el$4 = _el$3.nextSibling,
-            _el$5 = _el$4.nextSibling;
+      const _el$ = _tmpl$$3.cloneNode(true);
 
-      (_ => setTimeout(() => staff.ref.$ref = _))(_el$);
-
-      insert(_el$2, createComponent(Show, {
-        get when() {
-          return staff.playback.show;
-        },
-
-        children: cursor => (() => {
-          const _el$6 = _tmpl$2$1.cloneNode(true),
-                _el$7 = _el$6.firstChild,
-                _el$8 = _el$7.firstChild;
-
-          createRenderEffect(_p$ => {
-            const _v$ = cursor.style,
-                  _v$2 = cursor.line_style;
-            _p$._v$ = style(_el$7, _v$, _p$._v$);
-            _p$._v$2 = style(_el$8, _v$2, _p$._v$2);
-            return _p$;
-          }, {
-            _v$: undefined,
-            _v$2: undefined
-          });
-
-          return _el$6;
-        })()
-      }), _el$3);
-
-      insert(_el$4, createComponent(For, {
-        get each() {
-          return staff.ledgers;
-        },
-
-        children: ledger => (() => {
-          const _el$9 = _tmpl$3$1.cloneNode(true);
-
-          createRenderEffect(_$p => style(_el$9, ledger.style, _$p));
-
-          return _el$9;
-        })()
-      }), null);
-
-      insert(_el$4, createComponent(For, {
-        get each() {
-          return staff.bars;
-        },
-
-        children: bar => (() => {
-          const _el$10 = _tmpl$4$1.cloneNode(true);
-
-          createRenderEffect(_$p => style(_el$10, bar.style, _$p));
-
-          return _el$10;
-        })()
-      }), null);
-
-      insert(_el$4, createComponent(For, {
-        get each() {
-          return staff.stems;
-        },
-
-        children: stem => (() => {
-          const _el$11 = _tmpl$5$1.cloneNode(true);
-
-          createRenderEffect(_$p => style(_el$11, stem.style, _$p));
-
-          return _el$11;
-        })()
-      }), null);
-
-      insert(_el$4, createComponent(For, {
-        get each() {
-          return staff.beams;
-        },
-
-        children: beam => createComponent(Beam, {
-          get style() {
-            return beam.style;
-          },
-
-          get y2() {
-            return beam.y2;
-          }
-
-        })
-      }), null);
-
-      insert(_el$4, createComponent(For, {
-        get each() {
-          return staff.ties;
-        },
-
-        children: tie => createComponent(Tie, {
-          get klass() {
-            return tie.klass;
-          },
-
-          get style() {
-            return tie.style;
-          },
-
-          get x2() {
-            return tie.x2;
-          }
-
-        })
-      }), null);
-
-      insert(_el$5, createComponent(For, {
-        get each() {
-          return staff.bras;
-        },
-
-        children: bra => (() => {
-          const _el$12 = _tmpl$6$1.cloneNode(true);
-
-          insert(_el$12, () => g$1[bra.glyph]);
-
-          createRenderEffect(_p$ => {
-            const _v$3 = bra.klass,
-                  _v$4 = bra.style;
-            _v$3 !== _p$._v$3 && className(_el$12, _p$._v$3 = _v$3);
-            _p$._v$4 = style(_el$12, _v$4, _p$._v$4);
-            return _p$;
-          }, {
-            _v$3: undefined,
-            _v$4: undefined
-          });
-
-          return _el$12;
-        })()
-      }));
-
-      createRenderEffect(_$p => style(_el$, staff.style, _$p));
-
+      const _ref$ = $ref;
+      typeof _ref$ === "function" ? _ref$(_el$) : $ref = _el$;
       return _el$;
     })();
   };
 
-  function tie_path(x) {
-    return `M 0 ${x * 0.5} c ${x} -${x * 0.5}    ${x * 4} -${x * 0.5}    ${x * 5} 0
-    -${x} -${x * 0.5 - 4} -${x * 4} -${x * 0.5 - 4} -${x * 5} 0`;
-  }
-
-  function beam_path(x2, y2) {
-    let x = 0;
-    let y = 0;
-    let k = 10;
-    return `M${x},${y + k}L${x},${y}L${x2},${y2}L${x2},${y2 + k}L${x},${y + k}`;
-  }
-
-  const Tie = props => {
-    return (() => {
-      const _el$13 = _tmpl$7$1.cloneNode(true),
-            _el$14 = _el$13.firstChild,
-            _el$15 = _el$14.firstChild;
-
-      createRenderEffect(_p$ => {
-        const _v$5 = props.klass,
-              _v$6 = props.style,
-              _v$7 = tie_path(props.x2);
-
-        _v$5 !== _p$._v$5 && className(_el$13, _p$._v$5 = _v$5);
-        _p$._v$6 = style(_el$13, _v$6, _p$._v$6);
-        _v$7 !== _p$._v$7 && setAttribute(_el$15, "d", _p$._v$7 = _v$7);
-        return _p$;
-      }, {
-        _v$5: undefined,
-        _v$6: undefined,
-        _v$7: undefined
-      });
-
-      return _el$13;
-    })();
-  };
-
-  const Beam = props => {
-    props.y2;
-    return (() => {
-      const _el$16 = _tmpl$8$1.cloneNode(true),
-            _el$17 = _el$16.firstChild,
-            _el$18 = _el$17.firstChild;
-
-      createRenderEffect(_p$ => {
-        const _v$8 = props.style,
-              _v$9 = beam_path(100, props.y2);
-
-        _p$._v$8 = style(_el$16, _v$8, _p$._v$8);
-        _v$9 !== _p$._v$9 && setAttribute(_el$18, "d", _p$._v$9 = _v$9);
-        return _p$;
-      }, {
-        _v$8: undefined,
-        _v$9: undefined
-      });
-
-      return _el$16;
-    })();
-  };
-
-  function VStaff(element, options = {}) {
-    let staff = new Staff(element);
-    render(App$1(staff), element);
-    return {
-      sheet: staff.sheet,
-
-      set bras(bras) {
-        staff.bras = bras;
-      },
-
-      set xwi(xwi) {
-        staff.playback.xwi = xwi;
-      },
-
-      set playback(v) {
-        staff.playback.set_play(v);
-      }
-
-    };
-  }
-
-  const gclef = '';
-  const bclef = '';
-  const double_note = '';
-  const whole_note = '';
-  const half_note = '';
-  const quarter_note = '';
-  const brace = '';
-  const flat_accidental = '';
-  const natural_accidental = '';
-  const sharp_accidental = '';
-  const dsharp_accidental = '';
-  const dflat_accidental = '';
-  const eighth_flag_up = '';
-  const sixteenth_flag_up = '';
-  const thirtysecond_flag_up = '';
-  const sixtyfourth_flag_up = '';
-  const eighth_flag_down = '';
-  const sixteenth_flag_down = '';
-  const thirtysecond_flag_down = '';
-  const sixtyfourth_flag_down = '';
-  const double_rest = '';
-  const whole_rest = '';
-  const half_rest = '';
-  const quarter_rest = '';
-  const eighth_rest = '';
-  const sixteenth_rest = '';
-  const thirtysecond_rest = '';
-  const sixtyfourth_rest = '';
-  const onetwentyeighth_rest = '';
-  const zero_time = '';
-  const one_time = '';
-  const two_time = '';
-  const three_time = '';
-  const four_time = '';
-  const five_time = '';
-  const six_time = '';
-  const seven_time = '';
-  const eight_time = '';
-  const nine_time = '';
-  const ten_time = one_time + zero_time;
-  const twelve_time = one_time + two_time;
-  const common_time = '';
-  const cut_time = '';
-  const quarter_text = '';
-  const barline_single = '';
-  const barline_double = '';
-  const barline_final = '';
-  var g = {
-    barline_single,
-    barline_double,
-    barline_final,
-    quarter_text,
-    gclef,
-    bclef,
-    double_note,
-    whole_note,
-    half_note,
-    quarter_note,
-    flat_accidental,
-    natural_accidental,
-    sharp_accidental,
-    dflat_accidental,
-    dsharp_accidental,
-    eighth_flag_up,
-    sixteenth_flag_up,
-    thirtysecond_flag_up,
-    sixtyfourth_flag_up,
-    eighth_flag_down,
-    sixteenth_flag_down,
-    thirtysecond_flag_down,
-    sixtyfourth_flag_down,
-    eighth_flag_up,
-    sixteenth_flag_up,
-    thirtysecond_flag_up,
-    sixtyfourth_flag_up,
-    brace,
-    double_rest,
-    whole_rest,
-    half_rest,
-    quarter_rest,
-    eighth_rest,
-    sixteenth_rest,
-    thirtysecond_rest,
-    sixtyfourth_rest,
-    onetwentyeighth_rest,
-    zero_time,
-    one_time,
-    two_time,
-    three_time,
-    four_time,
-    five_time,
-    six_time,
-    seven_time,
-    eight_time,
-    nine_time,
-    ten_time,
-    twelve_time,
-    common_time,
-    cut_time
-  };
-
-  const _tmpl$ = /*#__PURE__*/template$1(`<solsido></solsido>`),
-        _tmpl$2 = /*#__PURE__*/template$1(`<h2> Major Key Exercise </h2>`),
-        _tmpl$3 = /*#__PURE__*/template$1(`<div class="key-exercise"><div> <!> </div></div>`),
-        _tmpl$4 = /*#__PURE__*/template$1(`<span class="action icon">Start</span>`),
-        _tmpl$5 = /*#__PURE__*/template$1(`<div class="key-explanation"><p>You can memorize major key signatures with this exercise.</p><p>Play the given key signature using your MIDI keyboard.</p><p>You have 2 minutes to play as much as you can.</p><p> Also, play and practice individual scales at where they are listed below. </p><p>Try these extra challenges:<ul><li>Spot the patterns that emerge from sharp side, and flat side.</li><li>Play with five fingers with the fingering techniques.</li><li>Say the notes as you play them.</li><li>Play without looking at the piano.</li></ul></p></div>`),
-        _tmpl$6 = /*#__PURE__*/template$1(`<div class="key-current"><span class="icon small">Restart</span><div class="box flex"><h4></h4></div><div class="scores"><div class="box status"><h4>High Score</h4><span></span></div></div></div>`),
-        _tmpl$7 = /*#__PURE__*/template$1(`<h3> <span class="major-type"></span> </h3>`),
-        _tmpl$8 = /*#__PURE__*/template$1(`<div class="key-current"><span class="icon small">Restart</span><div class="box flex"><h4></h4></div><div class="scores"><div class="box status"><h4>Score</h4><span></span></div><div class="box status"><h4> Time </h4><span></span></div></div><div class="major status"></div></div>`),
+  const _tmpl$$2 = /*#__PURE__*/template$1(`<main></main>`),
+        _tmpl$2$1 = /*#__PURE__*/template$1(`<h2> Major Key Exercise </h2>`),
+        _tmpl$3$1 = /*#__PURE__*/template$1(`<div class="key-exercise"><div> <!> </div></div>`),
+        _tmpl$4$1 = /*#__PURE__*/template$1(`<span class="action icon">Start</span>`),
+        _tmpl$5$1 = /*#__PURE__*/template$1(`<div class="key-explanation"><p>You can memorize major key signatures with this exercise.</p><p>Play the given key signature using your MIDI keyboard.</p><p>You have 2 minutes to play as much as you can.</p><p> Also, play and practice individual scales at where they are listed below. </p><p>Try these extra challenges:</p><ul><li>Spot the patterns that emerge from sharp side, and flat side.</li><li>Play with five fingers with the fingering techniques.</li><li>Say the notes as you play them.</li><li>Play without looking at the piano.</li></ul></div>`),
+        _tmpl$6$1 = /*#__PURE__*/template$1(`<div class="key-current"><span class="icon small">Restart</span><div class="box flex"><h4></h4></div><div class="scores"><div class="box status"><h4>High Score</h4><span></span></div></div></div>`),
+        _tmpl$7$1 = /*#__PURE__*/template$1(`<h3> <span class="major-type"></span> </h3>`),
+        _tmpl$8$1 = /*#__PURE__*/template$1(`<div class="key-current"><span class="icon small">Restart</span><div class="box flex"><h4></h4></div><div class="scores"><div class="box status"><h4>Score</h4><span></span></div><div class="box status"><h4> Time </h4><span></span></div></div><div class="major status"></div></div>`),
         _tmpl$9 = /*#__PURE__*/template$1(`<div class="key-controls"><group class="radio"><div><input id="time_min" name="time" type="radio"><label for="time_min">2 Minutes</label></div><div><input id="time_no" name="time" type="radio"><label for="time_no">No time</label></div></group><group class="radio"><div><input id="order_random" name="order" type="radio"><label for="order_random">Random</label></div><div><input id="order_sorted" name="order" type="radio"><label for="order_sorted">Sorted</label></div></group><group class="radio"><div><input id="nb_all" name="nb" type="radio"><label for="nb_all">All</label></div><div><input id="nb_sharps" name="nb" type="radio"><label for="nb_sharps">Sharps</label></div><div><input id="nb_flats" name="nb" type="radio"><label for="nb_flats">Flats</label></div></group><div class="switch"><div><input id="use_hints" name="use_hints" type="checkbox"><label for="use_hints">Show Hints</label></div></div></div>`),
         _tmpl$10 = /*#__PURE__*/template$1(`<h2> Major Key Signatures </h2>`),
         _tmpl$11 = /*#__PURE__*/template$1(`<div class="key-signatures"><div> <!> </div></div>`),
@@ -5359,38 +6621,21 @@ var Lado = (function () {
     return minutes + ':' + seconds;
   }
 
-  function unbindable(el, eventName, callback, options) {
-    el.addEventListener(eventName, callback, options);
-    return () => el.removeEventListener(eventName, callback, options);
-  }
-
-  const App = solsido => props => {
-    let unbinds = [];
-    unbinds.push(unbindable(document, 'scroll', () => solsido.onScroll(), {
-      capture: true,
-      passive: true
-    }));
-    unbinds.push(unbindable(window, 'resize', () => solsido.onScroll(), {
-      passive: true
-    }));
-    onCleanup$1(() => unbinds.forEach(_ => _()));
+  const Key = props => {
+    let sol_key = new Sol_Key(useSolsido());
     return (() => {
-      const _el$ = _tmpl$.cloneNode(true);
-
-      (_ => setTimeout(() => solsido.ref.$ref = _))(_el$);
-
-      _el$.$$click = _ => solsido.onClick();
+      const _el$ = _tmpl$$2.cloneNode(true);
 
       insert$1(_el$, createComponent$1(KeyExercises, {
         get exercises() {
-          return solsido._exercises;
+          return sol_key._exercises;
         }
 
       }), null);
 
       insert$1(_el$, createComponent$1(KeySignatures, {
         get majors() {
-          return solsido._majors;
+          return sol_key._majors;
         }
 
       }), null);
@@ -5400,9 +6645,9 @@ var Lado = (function () {
   };
 
   const KeyExercises = props => {
-    return [_tmpl$2.cloneNode(true), createComponent$1(Show$1, {
+    return [_tmpl$2$1.cloneNode(true), createComponent$1(Show$1, {
       get when() {
-        return console.log(props.exercises.explanations) || props.exercises.explanations;
+        return props.exercises.explanations;
       },
 
       get children() {
@@ -5416,7 +6661,7 @@ var Lado = (function () {
 
       get fallback() {
         return [(() => {
-          const _el$8 = _tmpl$4.cloneNode(true);
+          const _el$8 = _tmpl$4$1.cloneNode(true);
 
           _el$8.$$click = () => props.exercises.start(checkeds());
 
@@ -5448,7 +6693,7 @@ var Lado = (function () {
 
       })
     }), (() => {
-      const _el$3 = _tmpl$3.cloneNode(true),
+      const _el$3 = _tmpl$3$1.cloneNode(true),
             _el$4 = _el$3.firstChild,
             _el$5 = _el$4.firstChild,
             _el$7 = _el$5.nextSibling;
@@ -5466,12 +6711,12 @@ var Lado = (function () {
   };
 
   const KeyExerciseExplanation = props => {
-    return _tmpl$5.cloneNode(true);
+    return _tmpl$5$1.cloneNode(true);
   };
 
   const KeyExerciseResults = props => {
     return (() => {
-      const _el$10 = _tmpl$6.cloneNode(true),
+      const _el$10 = _tmpl$6$1.cloneNode(true),
             _el$11 = _el$10.firstChild,
             _el$12 = _el$11.nextSibling,
             _el$13 = _el$12.firstChild,
@@ -5494,7 +6739,7 @@ var Lado = (function () {
 
   const KeyExerciseCurrent = props => {
     return (() => {
-      const _el$18 = _tmpl$8.cloneNode(true),
+      const _el$18 = _tmpl$8$1.cloneNode(true),
             _el$19 = _el$18.firstChild,
             _el$20 = _el$19.nextSibling,
             _el$21 = _el$20.firstChild,
@@ -5521,7 +6766,7 @@ var Lado = (function () {
         },
 
         get children() {
-          const _el$30 = _tmpl$7.cloneNode(true),
+          const _el$30 = _tmpl$7$1.cloneNode(true),
                 _el$31 = _el$30.firstChild,
                 _el$32 = _el$31.nextSibling;
 
@@ -5652,39 +6897,16 @@ var Lado = (function () {
     })()];
   };
 
-  const _VStaff = props => {
-    let $ref;
-    onMount(() => {
-      let api = VStaff($ref);
-      createEffect(() => {
-        api.bras = props.bras;
-      });
-      createEffect(() => {
-        api.xwi = props.xwi || '';
-      });
-      createEffect(() => {
-        api.playback = props.playback;
-      });
-    });
-    return (() => {
-      const _el$61 = _tmpl$12.cloneNode(true);
-
-      const _ref$9 = $ref;
-      typeof _ref$9 === "function" ? _ref$9(_el$61) : $ref = _el$61;
-      return _el$61;
-    })();
-  };
-
   const CMajorExercise = props => {
     return (() => {
-      const _el$62 = _tmpl$13.cloneNode(true),
-            _el$63 = _el$62.firstChild;
+      const _el$61 = _tmpl$13.cloneNode(true),
+            _el$62 = _el$61.firstChild;
 
-      insert$1(_el$63, createComponent$1(_VStaff, mergeProps(() => props.current)));
+      insert$1(_el$62, createComponent$1(_VStaff, mergeProps(() => props.current)));
 
-      createRenderEffect$1(() => className$1(_el$63, ['major-staff', props.current?.klass || ''].join(' ')));
+      createRenderEffect$1(() => className$1(_el$62, ['major-staff', props.current?.klass || ''].join(' ')));
 
-      return _el$62;
+      return _el$61;
     })();
   };
 
@@ -5711,31 +6933,31 @@ var Lado = (function () {
     let _show_controls = createSignal$1(false);
 
     return (() => {
-      const _el$64 = _tmpl$14.cloneNode(true),
+      const _el$63 = _tmpl$14.cloneNode(true),
+            _el$64 = _el$63.firstChild,
             _el$65 = _el$64.firstChild,
             _el$66 = _el$65.firstChild,
-            _el$67 = _el$66.firstChild,
-            _el$68 = _el$67.nextSibling,
-            _el$69 = _el$66.nextSibling,
-            _el$70 = _el$65.nextSibling,
-            _el$71 = _el$70.firstChild;
+            _el$67 = _el$66.nextSibling,
+            _el$68 = _el$65.nextSibling,
+            _el$69 = _el$64.nextSibling,
+            _el$70 = _el$69.firstChild;
 
-      _el$64.$$mouseover = _ => owrite$1(_show_controls, true);
+      _el$63.$$mouseover = _ => owrite(_show_controls, true);
 
-      _el$64.addEventListener("mouseleave", _ => owrite$1(_show_controls, false));
+      _el$63.addEventListener("mouseleave", _ => owrite(_show_controls, false));
 
-      insert$1(_el$66, () => createComponent$1(Tonic, {
+      insert$1(_el$65, () => createComponent$1(Tonic, {
         get tonic() {
           return props.major.majorKey.tonic;
         }
 
-      }), _el$67);
+      }), _el$66);
 
-      insert$1(_el$68, () => props.major.majorKey.type);
+      insert$1(_el$67, () => props.major.majorKey.type);
 
-      insert$1(_el$69, createComponent$1(Show$1, {
+      insert$1(_el$68, createComponent$1(Show$1, {
         get when() {
-          return read$1(_show_controls);
+          return read(_show_controls);
         },
 
         get children() {
@@ -5766,12 +6988,12 @@ var Lado = (function () {
 
       }));
 
-      const _ref$10 = $ref;
-      typeof _ref$10 === "function" ? _ref$10(_el$71) : $ref = _el$71;
+      const _ref$9 = $ref;
+      typeof _ref$9 === "function" ? _ref$9(_el$70) : $ref = _el$70;
 
-      createRenderEffect$1(() => className$1(_el$70, ['major-staff', ...props.major.klass].join(' ')));
+      createRenderEffect$1(() => className$1(_el$69, ['major-staff', ...props.major.klass].join(' ')));
 
-      return _el$64;
+      return _el$63;
     })();
   };
 
@@ -5782,11 +7004,11 @@ var Lado = (function () {
       },
 
       get children() {
-        const _el$72 = _tmpl$15.cloneNode(true);
+        const _el$71 = _tmpl$15.cloneNode(true);
 
-        insert$1(_el$72, () => g['flat_accidental']);
+        insert$1(_el$71, () => g['flat_accidental']);
 
-        return _el$72;
+        return _el$71;
       }
 
     }), createComponent$1(Show$1, {
@@ -5795,11 +7017,11 @@ var Lado = (function () {
       },
 
       get children() {
-        const _el$73 = _tmpl$15.cloneNode(true);
+        const _el$72 = _tmpl$15.cloneNode(true);
 
-        insert$1(_el$73, () => g['sharp_accidental']);
+        insert$1(_el$72, () => g['sharp_accidental']);
 
-        return _el$73;
+        return _el$72;
       }
 
     })];
@@ -5807,23 +7029,851 @@ var Lado = (function () {
 
   const Icon = props => {
     return (() => {
-      const _el$74 = _tmpl$16.cloneNode(true);
+      const _el$73 = _tmpl$16.cloneNode(true);
 
-      addEventListener(_el$74, "click", props.onClick, true);
+      addEventListener(_el$73, "click", props.onClick, true);
 
-      insert$1(_el$74, () => props.children);
+      insert$1(_el$73, () => props.children);
 
-      createRenderEffect$1(() => setAttribute$1(_el$74, "title", props.title));
+      createRenderEffect$1(() => setAttribute$1(_el$73, "title", props.title));
 
-      return _el$74;
+      return _el$73;
     })();
   };
 
   delegateEvents(["click", "mouseover"]);
 
+  const make_playback = (m_nb_beats, m_notes) => {
+    let _playing = createSignal$1(false);
+
+    let m_bpm = createMemo$1(() => {
+      if (read(_playing)) {
+        return make_bpm(m_nb_beats(), 120);
+      }
+    });
+    let m_trigger = createMemo$1(() => {
+      let __ = m_bpm()?.beat_ms;
+
+      if (__) {
+        let [sub, ms, i_sub, subs] = __;
+
+        if (i_sub < 0) {
+          return __;
+        }
+      }
+    });
+    return {
+      get on_sub() {
+        return m_trigger();
+      },
+
+      get bpm() {
+        return m_bpm();
+      },
+
+      set bpm(bpm) {
+        let _bpm = m_bpm();
+
+        if (_bpm) {
+          _bpm.bpm = bpm;
+        }
+      },
+
+      set playing(v) {
+        owrite(_playing, v);
+      },
+
+      get playing() {
+        return read(_playing);
+      }
+
+    };
+  };
+  const make_bpm = (nb_beats, bpm = 120) => {
+    let _bpm = createSignal$1(bpm);
+
+    let _ms_per_beat = createMemo$1(() => 60000 / read(_bpm));
+
+    let _subs = createSignal$1(4);
+
+    let _ms_per_sub = createMemo$1(() => read(_ms_per_beat) / read(_subs));
+
+    let _sub = createSignal$1(-4 * nb_beats - 1);
+
+    let _lookahead_ms = 20;
+
+    let _t = createSignal$1(_lookahead_ms);
+
+    let m_t = createMemo$1(() => read(_t) - _lookahead_ms);
+    let cancel = loop((dt, dt0) => {
+      let t = read(_t);
+
+      let ms_per_sub = _ms_per_sub();
+
+      if (t + dt + _lookahead_ms > ms_per_sub) {
+        batch$1(() => {
+          owrite(_t, _ => _ = _ - ms_per_sub + dt);
+          owrite(_sub, _ => _ + 1);
+        });
+      } else {
+        owrite(_t, _ => _ + dt);
+      }
+    });
+    onCleanup$1(() => {
+      cancel();
+    });
+    return {
+      get bpm() {
+        return read(_bpm);
+      },
+
+      set bpm(bpm) {
+        owrite(_bpm, Math.max(20, bpm));
+      },
+
+      get beat_ms() {
+        return [read(_sub), m_t(), m_t() / _ms_per_sub(), read(_subs)];
+      },
+
+      get ms_per_sub() {
+        return _ms_per_sub();
+      }
+
+    };
+  };
+
+  const make_player = (m_player, playback, m_notes) => {
+    let _synth = createSignal$1({
+      wave: 'sawtooth',
+      volume: 1,
+      cutoff: 0.2,
+      cutoff_max: 0.4,
+      amplitude: 1,
+      filter_adsr: {
+        a: 0.1,
+        d: 0.1,
+        s: 0,
+        r: 0
+      },
+      amp_adsr: {
+        a: 0.1,
+        d: 0.1,
+        s: 0.2,
+        r: 0.02
+      }
+    });
+
+    let _loop = createSignal$1([0, 16]);
+
+    let m_free = createMemo$1(() => m_notes().map(_ => {
+      let [note, d_sub] = _.split('@');
+
+      let [at, sub] = d_sub.split(',');
+      return [note, parseInt(at), parseInt(sub), -1];
+    }));
+    createEffect(() => {
+      let {
+        on_sub
+      } = playback;
+
+      if (on_sub) {
+        let [_sub, ms] = on_sub;
+        let [_loop_begin, _loop_end] = read(_loop);
+
+        let _loop_range = _loop_end - _loop_begin;
+
+        let sub = _sub % _loop_range + _loop_begin;
+
+        let _in = m_free().filter(_ => _[1] === sub && _[3] !== _sub);
+
+        let player = m_player();
+        let {
+          bpm
+        } = playback;
+
+        if (player && bpm) {
+          _in.forEach(_ => {
+            let [note, __, dur_subs] = _;
+            let duration = dur_subs * bpm.ms_per_sub;
+            player.attack(read(_synth), note, player.currentTime - ms / 1000);
+            player.release(note, player.currentTime + (-ms + duration) / 1000);
+            _[3] = _sub;
+          });
+        }
+      }
+    });
+    return {
+      set loop(loop) {
+        owrite(_loop, loop);
+      },
+
+      set synth(synth) {
+        owrite(_synth, synth);
+      }
+
+    };
+  };
+
+  let bpms = [20, 30, 60, 90, 120, 180, 200, 400];
+  let beats = [1, 2, 3, 4];
+
+  function on_interval(life, life0, t) {
+    return Math.floor(life0 / t) !== Math.floor(life / t);
+  }
+
+  class Sol_Rhythm {
+    constructor(solsido) {
+      this.solsido = solsido;
+      this._exercises = make_exercises(this);
+    }
+
+  }
+
+  const make_exercises = rhythm => {
+    let yardstick = make_yardstick(rhythm);
+    return {
+      yardstick
+    };
+  };
+
+  const make_yardstick = rhythm => {
+    let {
+      solsido
+    } = rhythm;
+
+    let _nb_beats = createSignal$1(4);
+
+    let m_nb_beats = createMemo$1(() => read(_nb_beats));
+
+    let _playback = make_playback(m_nb_beats);
+
+    let m_osc_player = createMemo$1(() => solsido.osc_player);
+    let m_up_notes = createMemo$1(() => {
+      _playback.playing;
+      _playback.bpm;
+      return ['D5@-16,2', 'D5@0,2'];
+    });
+    let m_down_notes = createMemo$1(() => {
+      _playback.playing;
+      _playback.bpm;
+      return ['F4@-12,2', 'A4@-8,2', 'F4@-4,2', 'F4@4,2', 'A4@8,2', 'F4@12,2'];
+    });
+
+    let _m_up_player = make_player(m_osc_player, _playback, m_up_notes);
+
+    let _m_down_player = make_player(m_osc_player, _playback, m_down_notes);
+
+    createEffect(() => {
+      let beats = read(_nb_beats);
+      _m_up_player.loop = [0, beats * 4];
+      _m_down_player.loop = [0, beats * 4];
+    });
+    _m_up_player.synth = {
+      wave: 'sine',
+      volume: 1,
+      cutoff: 0.2,
+      cutoff_max: 0.4,
+      amplitude: 1,
+      filter_adsr: {
+        a: 0,
+        d: 0.03,
+        s: 0,
+        r: 0
+      },
+      amp_adsr: {
+        a: 0.01,
+        d: 0.02,
+        s: 0,
+        r: 0
+      }
+    };
+    _m_down_player.synth = {
+      wave: 'sine',
+      volume: 1,
+      cutoff: 0.2,
+      cutoff_max: 0.4,
+      amplitude: 1,
+      filter_adsr: {
+        a: 0.02,
+        d: 0.02,
+        s: 0,
+        r: 0
+      },
+      amp_adsr: {
+        a: 0.01,
+        d: 0.01,
+        s: 0,
+        r: 0.02
+      }
+    };
+    let m_x = createMemo$1(() => {
+      let beat_ms = _playback.bpm?.beat_ms;
+
+      if (beat_ms) {
+        let [sub, ms, sub_i, subs] = beat_ms;
+        let beat = (sub + sub_i) / subs;
+        return beat;
+      }
+    });
+    /*
+    
+     0 1 2 3
+     4 5 6 7
+      1 1
+     3 3
+     3.5 3.5
+     4 1
+    */
+
+    let m_cursor1_x = createMemo$1(() => {
+      if (m_x() < 0) {
+        return -10;
+      }
+
+      let nb_beats = read(_nb_beats);
+      let half = nb_beats / 2;
+      return ((m_x() - half) % nb_beats + half) / nb_beats;
+    });
+    let m_cursor2_x = createMemo$1(() => {
+      let nb_beats = read(_nb_beats);
+      let half = nb_beats / 2;
+      return ((m_x() + half) % nb_beats - half) / nb_beats;
+    });
+
+    let _beats = [...Array(48 * 4 + 1).keys()].map(i => make_beat(rhythm, i, _nb_beats));
+
+    let m_cursor1_style = createMemo$1(() => ({
+      left: `${m_cursor1_x() * 48 * 4 * 100 / (48 * 4 + 1)}%`
+    }));
+    let m_cursor2_style = createMemo$1(() => ({
+      left: `${m_cursor2_x() * 48 * 4 * 100 / (48 * 4 + 1)}%`
+    }));
+    let m_bpm = createMemo$1(prev => _playback.bpm?.bpm || prev);
+
+    let _hits = createSignal$1([], {
+      equals: false
+    });
+
+    let m_hits = createMemo$1(() => read(_hits).map(_ => make_hit(rhythm, _)));
+    let synth = {
+      adsr: {
+        a: 0,
+        d: 0.1,
+        s: 0.05,
+        r: 0.6
+      }
+    };
+    createEffect(on(() => _playback.playing, p => {
+      if (p) {
+        make_midi({
+          just_ons(ons) {
+            let {
+              player
+            } = solsido;
+            ons.slice(-1).forEach(_ => player?.attack(synth, fuzzy_note(_)));
+            let nb_beats = read(_nb_beats);
+            write(_hits, _ => _.push(m_x() % nb_beats / nb_beats));
+          },
+
+          just_offs(offs) {
+            let {
+              player
+            } = solsido;
+            offs.forEach(_ => player?.release(fuzzy_note(_)));
+          }
+
+        });
+        onCleanup$1(() => {});
+      }
+    }));
+    let m_x0 = createMemo$1(on(m_x, (v, p) => {
+      return p;
+    }));
+    let m_on_beat = createMemo$1(p => {
+      let nb_beats = read(_nb_beats);
+      let x = m_x();
+
+      if (x > 0 && on_interval(x, m_x0(), nb_beats)) {
+        return x;
+      }
+
+      return p;
+    });
+    createEffect(on(m_on_beat, () => {
+      owrite(_hits, []);
+    }));
+
+    let _scores = createSignal$1([], {
+      equals: false
+    });
+
+    let m_scores = createMemo$1(() => read(_scores).map((_, i) => make_score(rhythm, i, _)));
+    let _next_scores = [[0, 0.5]];
+
+    const next_scores = () => {
+      return _next_scores.pop();
+    };
+
+    createEffect(on(m_on_beat, v => {
+      if (v !== undefined) {
+        let scores = m_scores();
+        m_hits();
+        scores.forEach(_ => _.on_beat());
+
+        if (read(_scores).length === 0) {
+          owrite(_scores, next_scores());
+        }
+      }
+    }));
+    return {
+      get hits() {
+        return m_hits();
+      },
+
+      get scores() {
+        return m_scores();
+      },
+
+      get cursor1_style() {
+        return m_cursor1_style();
+      },
+
+      get cursor2_style() {
+        return m_cursor2_style();
+      },
+
+      set nb_beats(value) {
+        let _beats = beats.indexOf(read(_nb_beats)) + value + beats.length;
+
+        _beats = Math.max(0, _beats) % beats.length;
+        owrite(_nb_beats, beats[_beats]);
+      },
+
+      get nb_beats() {
+        return read(_nb_beats);
+      },
+
+      get beats() {
+        return _beats;
+      },
+
+      get bpm() {
+        return m_bpm();
+      },
+
+      set bpm(value) {
+        if (!_playback.bpm) {
+          return;
+        }
+
+        let _bpm = bpms.indexOf(_playback.bpm.bpm) + value + bpms.length;
+
+        _bpm = Math.max(0, _bpm) % bpms.length;
+        _playback.bpm = bpms[_bpm];
+      },
+
+      get playback_playing() {
+        return _playback.playing ? 'stop' : 'play';
+      },
+
+      toggle_playback_playing() {
+        solsido.user_click();
+        _playback.playing = !_playback.playing;
+      }
+
+    };
+  };
+
+  const make_hit = (rhythm, _) => {
+    let _x = _;
+    let m_style = createMemo$1(() => ({
+      left: `${_x * 48 * 4 * 100 / (48 * 4 + 1)}%`
+    }));
+    return {
+      get x() {
+        return _x;
+      },
+
+      get style() {
+        return m_style();
+      }
+
+    };
+  };
+
+  let colors = ['ghost', 'red', 'blue', 'green'];
+
+  const make_score = (rhythm, i, _) => {
+    let _i_score = createSignal$1(0);
+
+    let _x = _;
+    let m_style = createMemo$1(() => ({
+      left: `${_x * 48 * 4 * 100 / (48 * 4 + 1)}%`
+    }));
+    let m_klass = createMemo$1(() => [colors[read(_i_score)]].join(' '));
+    return {
+      i,
+
+      get x() {
+        return _x;
+      },
+
+      on_beat() {
+        owrite(_i_score, _ => _ === 0 ? 1 : _);
+      },
+
+      dispose_on_beat() {},
+
+      get klass() {
+        return m_klass();
+      },
+
+      get style() {
+        return m_style();
+      }
+
+    };
+  };
+
+  const make_beat = (rhythm, i, _nb_beats) => {
+    // beat 0-15
+    let m_n = createMemo$1(() => 48 * 4 / read(_nb_beats));
+    let m_on_beat = createMemo$1(() => i % m_n() === 0);
+    let m_up_beat = createMemo$1(() => i % (m_n() / 2) === 0);
+    let m_sub_division = createMemo$1(() => i % (m_n() / 4) === 0);
+    let m_strong = createMemo$1(() => m_on_beat());
+    let m_medium = createMemo$1(() => m_up_beat());
+    let m_weak = createMemo$1(() => m_sub_division());
+    let m_klass = createMemo$1(() => [m_strong() ? 'strong' : m_medium() ? 'medium' : m_weak() ? 'weak' : ''].join(' '));
+    return {
+      get klass() {
+        return m_klass();
+      }
+
+    };
+  };
+
+  const _tmpl$$1 = /*#__PURE__*/template$1(`<main></main>`),
+        _tmpl$2 = /*#__PURE__*/template$1(`<div class="rhythm-exercises"><h2> Yardstick Exercise </h2><div class="yardstick-controls"></div><div class="yardstick-wrap"></div><h2> Notes Exercise </h2><div class="main-staff"></div></div>`),
+        _tmpl$3 = /*#__PURE__*/template$1(`<metronome><span class="icon"></span><group><label>bpm</label></group><group><label>beats</label></group></metronome>`),
+        _tmpl$4 = /*#__PURE__*/template$1(`<div class="up-down"><span class="value-down">-</span><span class="value"> <!> </span> <span class="value-up">+</span></div>`),
+        _tmpl$5 = /*#__PURE__*/template$1(`<yardstick><playback><cursor></cursor><cursor></cursor></playback><scores></scores><sticks></sticks></yardstick>`),
+        _tmpl$6 = /*#__PURE__*/template$1(`<hit></hit>`),
+        _tmpl$7 = /*#__PURE__*/template$1(`<score></score>`),
+        _tmpl$8 = /*#__PURE__*/template$1(`<stick></stick>`);
+  const Rhythm = props => {
+    let sol_rhythm = new Sol_Rhythm(useSolsido());
+    return (() => {
+      const _el$ = _tmpl$$1.cloneNode(true);
+
+      insert$1(_el$, createComponent$1(RExercises, {
+        get exercises() {
+          return sol_rhythm._exercises;
+        }
+
+      }));
+
+      return _el$;
+    })();
+  };
+
+  const RExercises = props => {
+    return (() => {
+      const _el$2 = _tmpl$2.cloneNode(true),
+            _el$3 = _el$2.firstChild,
+            _el$4 = _el$3.nextSibling,
+            _el$5 = _el$4.nextSibling,
+            _el$6 = _el$5.nextSibling,
+            _el$7 = _el$6.nextSibling;
+
+      insert$1(_el$4, createComponent$1(Metronome, {
+        toggle_play: () => props.exercises.yardstick.toggle_playback_playing(),
+
+        get play_mode() {
+          return props.exercises.yardstick.playback_playing;
+        },
+
+        get beats() {
+          return props.exercises.yardstick.nb_beats;
+        },
+
+        set_beats: _ => props.exercises.yardstick.nb_beats = _,
+
+        get bpm() {
+          return props.exercises.yardstick.bpm;
+        },
+
+        set_bpm: _ => props.exercises.yardstick.bpm = _
+      }));
+
+      insert$1(_el$5, createComponent$1(Yardstick, {
+        get yardstick() {
+          return props.exercises.yardstick;
+        }
+
+      }));
+
+      insert$1(_el$7, createComponent$1(_VStaff, {}));
+
+      return _el$2;
+    })();
+  };
+
+  const Metronome = props => {
+    return (() => {
+      const _el$8 = _tmpl$3.cloneNode(true),
+            _el$9 = _el$8.firstChild,
+            _el$10 = _el$9.nextSibling;
+            _el$10.firstChild;
+            const _el$12 = _el$10.nextSibling;
+            _el$12.firstChild;
+
+      addEventListener(_el$9, "click", props.toggle_play, true);
+
+      insert$1(_el$9, () => props.play_mode);
+
+      insert$1(_el$10, createComponent$1(UpDownControl, {
+        get value() {
+          return props.bpm;
+        },
+
+        setValue: _ => props.set_bpm(_)
+      }), null);
+
+      insert$1(_el$12, createComponent$1(UpDownControl, {
+        get value() {
+          return props.beats;
+        },
+
+        setValue: _ => props.set_beats(_)
+      }), null);
+
+      return _el$8;
+    })();
+  };
+
+  const dformat = v => v < 10 ? `0${v}` : `${v}`;
+
+  const UpDownControl = props => {
+    const value = value => {
+      props.setValue(value);
+    };
+
+    return (() => {
+      const _el$14 = _tmpl$4.cloneNode(true),
+            _el$15 = _el$14.firstChild,
+            _el$16 = _el$15.nextSibling,
+            _el$17 = _el$16.firstChild,
+            _el$19 = _el$17.nextSibling;
+            _el$19.nextSibling;
+            const _el$20 = _el$16.nextSibling,
+            _el$21 = _el$20.nextSibling;
+
+      _el$15.$$click = _ => value(-1);
+
+      _el$16.$$click = _ => value(+1);
+
+      insert$1(_el$16, () => dformat(props.value), _el$19);
+
+      _el$21.$$click = _ => value(+1);
+
+      return _el$14;
+    })();
+  };
+
+  const Yardstick = props => {
+    return (() => {
+      const _el$22 = _tmpl$5.cloneNode(true),
+            _el$23 = _el$22.firstChild,
+            _el$24 = _el$23.firstChild,
+            _el$25 = _el$24.nextSibling,
+            _el$26 = _el$23.nextSibling,
+            _el$27 = _el$26.nextSibling;
+
+      insert$1(_el$26, createComponent$1(For$1, {
+        get each() {
+          return props.yardstick.hits;
+        },
+
+        children: hit => (() => {
+          const _el$28 = _tmpl$6.cloneNode(true);
+
+          createRenderEffect$1(_$p => style$1(_el$28, hit.style, _$p));
+
+          return _el$28;
+        })()
+      }), null);
+
+      insert$1(_el$26, createComponent$1(For$1, {
+        get each() {
+          return props.yardstick.scores;
+        },
+
+        children: score => (() => {
+          const _el$29 = _tmpl$7.cloneNode(true);
+
+          createRenderEffect$1(_p$ => {
+            const _v$3 = score.klass,
+                  _v$4 = score.style;
+            _v$3 !== _p$._v$3 && className$1(_el$29, _p$._v$3 = _v$3);
+            _p$._v$4 = style$1(_el$29, _v$4, _p$._v$4);
+            return _p$;
+          }, {
+            _v$3: undefined,
+            _v$4: undefined
+          });
+
+          return _el$29;
+        })()
+      }), null);
+
+      insert$1(_el$27, createComponent$1(For$1, {
+        get each() {
+          return props.yardstick.beats;
+        },
+
+        children: beat => (() => {
+          const _el$30 = _tmpl$8.cloneNode(true);
+
+          createRenderEffect$1(() => className$1(_el$30, beat.klass));
+
+          return _el$30;
+        })()
+      }));
+
+      createRenderEffect$1(_p$ => {
+        const _v$ = props.yardstick.cursor1_style,
+              _v$2 = props.yardstick.cursor2_style;
+        _p$._v$ = style$1(_el$24, _v$, _p$._v$);
+        _p$._v$2 = style$1(_el$25, _v$2, _p$._v$2);
+        return _p$;
+      }, {
+        _v$: undefined,
+        _v$2: undefined
+      });
+
+      return _el$22;
+    })();
+  };
+
+  delegateEvents(["click"]);
+
+  const _tmpl$ = /*#__PURE__*/template$1(`<solsido><header><input class="topnav-toggle fullscreen-toggle" type="checkbox" id="tn-tg"><label for="tn-tg" class="fullscreen-mask"></label><label for="tn-tg" class="hbg"> <span class="hbg_in"></span></label><nav id="topnav"><section></section><section> <!> </section><section> <!> </section></nav><h1 class="site-title"></h1></header><div id="main-wrap"></div></solsido>`);
+
+  function unbindable(el, eventName, callback, options) {
+    el.addEventListener(eventName, callback, options);
+    return () => el.removeEventListener(eventName, callback, options);
+  }
+
+  const App = props => {
+    let solsido = useSolsido();
+    let unbinds = [];
+    unbinds.push(unbindable(document, 'scroll', () => solsido.onScroll(), {
+      capture: true,
+      passive: true
+    }));
+    unbinds.push(unbindable(window, 'resize', () => solsido.onScroll(), {
+      passive: true
+    }));
+    onCleanup$1(() => unbinds.forEach(_ => _()));
+    let $topnav_toggle;
+    let location = useLocation();
+    createEffect(() => {
+      location.pathname;
+      $topnav_toggle.checked = false;
+    });
+    return (() => {
+      const _el$ = _tmpl$.cloneNode(true),
+            _el$2 = _el$.firstChild,
+            _el$3 = _el$2.firstChild,
+            _el$4 = _el$3.nextSibling,
+            _el$5 = _el$4.nextSibling,
+            _el$6 = _el$5.nextSibling,
+            _el$7 = _el$6.firstChild,
+            _el$8 = _el$7.nextSibling,
+            _el$9 = _el$8.firstChild,
+            _el$11 = _el$9.nextSibling;
+            _el$11.nextSibling;
+            const _el$12 = _el$8.nextSibling,
+            _el$13 = _el$12.firstChild,
+            _el$15 = _el$13.nextSibling;
+            _el$15.nextSibling;
+            const _el$16 = _el$6.nextSibling,
+            _el$17 = _el$2.nextSibling;
+
+      (_ => setTimeout(() => solsido.ref.$ref = _))(_el$);
+
+      _el$.$$click = _ => solsido.onClick();
+
+      const _ref$ = $topnav_toggle;
+      typeof _ref$ === "function" ? _ref$(_el$3) : $topnav_toggle = _el$3;
+
+      insert$1(_el$7, createComponent$1(Link, {
+        href: "/",
+        children: " lasolsido.org "
+      }));
+
+      insert$1(_el$8, createComponent$1(NavLink, {
+        href: "/rhythm",
+        children: "Rhythm"
+      }), _el$11);
+
+      insert$1(_el$12, createComponent$1(NavLink, {
+        href: "/key",
+        children: "Key Signatures"
+      }), _el$15);
+
+      insert$1(_el$16, createComponent$1(Link, {
+        get href() {
+          return location.pathname;
+        },
+
+        get children() {
+          return location.pathname;
+        }
+
+      }));
+
+      insert$1(_el$17, createComponent$1(Routes, {
+        get children() {
+          return [createComponent$1(Route, {
+            path: "/",
+            component: Home
+          }), createComponent$1(Route, {
+            path: "/key",
+            component: Key
+          }), createComponent$1(Route, {
+            path: "/rhythm",
+            component: Rhythm
+          })];
+        }
+
+      }));
+
+      return _el$;
+    })();
+  };
+
+  const AppWithRouter = options => props => {
+    return createComponent$1(Router, {
+      get children() {
+        return createComponent$1(SolsidoProvider, {
+          options: options,
+
+          get children() {
+            return createComponent$1(App, {});
+          }
+
+        });
+      }
+
+    });
+  };
+
+  delegateEvents(["click"]);
+
   function Lado(element, options = {}) {
-    let solsido = new Solsido();
-    render$1(App(solsido), element);
+    render$1(AppWithRouter(options), element);
     return {};
   }
 
