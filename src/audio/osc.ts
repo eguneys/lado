@@ -65,8 +65,8 @@ class OscPlayer extends HasAudioAnalyser {
     osc1.connect(osc1_mix)
     osc2.connect(osc2_mix)
 
-    osc1_mix.gain.setValueAtTime(0.5, now)
-    osc2_mix.gain.setValueAtTime(0.5, now)
+    osc1_mix.gain.setValueAtTime(1, now)
+    osc2_mix.gain.setValueAtTime(1, now)
 
     let filter = new BiquadFilterNode(context, { type: 'lowpass', Q: 6 })
     this.filter = filter
@@ -98,7 +98,7 @@ class OscPlayer extends HasAudioAnalyser {
         now,
         amp_adsr,
         0,
-        amplitude * 0.5)
+        amplitude)
 
     osc1.start(now)
     osc2.start(now)

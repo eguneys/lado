@@ -64,6 +64,10 @@ export default class Solsido {
     return read(this.r_opc)
   }
 
+  get player() {
+    return read(this.r_pc)
+  }
+
   constructor() {
 
     this._user_click = createSignal(false)

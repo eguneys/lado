@@ -1,11 +1,17 @@
-import { on, createEffect, createMemo, createSignal } from 'solid-js'
+import { onCleanup, on, createEffect, createMemo, createSignal } from 'solid-js'
 import { read, write, owrite } from './play'
 import { Solsido } from './solsido'
 import { make_playback } from './make_playback'
 import { make_player } from './make_player'
+import { make_midi } from './make_midi'
+import { fuzzy_note } from './audio'
 
 let bpms = [20, 30, 60, 90, 120, 180, 200, 400]
 let beats = [1, 2, 3, 4]
+
+function on_interval(life: number, life0: number, t: number) {
+  return Math.floor(life0 / t) !== Math.floor(life / t)
+}
 
 export default class Sol_Rhythm {
 
@@ -58,10 +64,10 @@ const make_yardstick = (rhythm: SolRhythm) => {
   _m_up_player.synth = {
     wave: 'sine', 
     volume: 1, 
-    cutoff: 0.3, 
-    cutoff_max: 0.2, 
+    cutoff: 0.2, 
+    cutoff_max: 0.4, 
     amplitude: 1, 
-    filter_adsr: { a: 0, d: 0.03, s: 0.5, r: 0 }, 
+    filter_adsr: { a: 0, d: 0.03, s: 0, r: 0 }, 
     amp_adsr: { a: 0.01, d: 0.02, s: 0, r: 0 }
   }
   _m_down_player.synth = {
@@ -113,19 +119,93 @@ const make_yardstick = (rhythm: SolRhythm) => {
   .map(i => make_beat(rhythm, i, _nb_beats))
 
   let m_cursor1_style = createMemo(() => ({
-    left: `${m_cursor1_x() * 48 * 100/49}%`
+    left: `${m_cursor1_x() * 48 * 4 * 100/(48 * 4 + 1)}%`
   }))
 
   let m_cursor2_style = createMemo(() => ({
-    left: `${m_cursor2_x() * 48 * 100/49}%`
+    left: `${m_cursor2_x() * 48 * 4 * 100/(48 * 4 + 1)}%`,
   }))
 
   let m_bpm = createMemo((prev) =>
     _playback.bpm?.bpm || prev
   )
 
+  let _hits = createSignal([], { equals: false })
+  let m_hits = createMemo(() => read(_hits).map(_ => make_hit(rhythm, _)))
+
+  let synth = {
+    adsr: { a: 0, d: 0.1, s: 0.05, r: 0.6 }
+  }
+
+  createEffect(on(() => _playback.playing, p => {
+    if (p) {
+
+      let midi = make_midi({
+        just_ons(ons: Array<Note>) {
+          let { player } = solsido
+          ons.slice(-1).forEach(_ => player?.attack(synth, fuzzy_note(_)))
+          let nb_beats = read(_nb_beats)
+          write(_hits, _ => _.push(m_x() % nb_beats / nb_beats))
+        },
+        just_offs(offs: Array<Note>) {
+          let { player } = solsido
+          offs.forEach(_ => player?.release(fuzzy_note(_)))
+        }
+      })
+      onCleanup(() => {
+      })
+    }
+  }))
+
+  let m_x0 = createMemo(on(m_x, (v, p) => {
+    return p
+  }))
+  
+  let m_on_beat = createMemo(p => {
+    let nb_beats = read(_nb_beats)
+    let x = m_x()
+
+    if (x > 0 && on_interval(x, m_x0(), nb_beats)) {
+      return x
+    }
+    return p
+  })
+
+  createEffect(on(m_on_beat, () => {
+    owrite(_hits, [])
+  }))
+
+
+  let _scores = createSignal([], { equals: false })
+  let m_scores = createMemo(() => read(_scores).map((_, i) => make_score(rhythm, i, _)))
+
+  let _next_scores = [[0, 0.5]]
+  const next_scores = () => {
+    return _next_scores.pop()
+  }
+
+  createEffect(on(m_on_beat, v => {
+    if (v !== undefined) {
+      let scores = m_scores()
+      let hits = m_hits()
+      scores.forEach(_ => _.on_beat())
+      if (read(_scores).length === 0) {
+        owrite(_scores, next_scores())
+      }
+
+
+      scores,
+      hits
+    }
+  }))
 
   return {
+    get hits() {
+      return m_hits()
+    },
+    get scores() {
+      return m_scores()
+    },
     get cursor1_style() { return m_cursor1_style() },
     get cursor2_style() { return m_cursor2_style() },
     set nb_beats(value: number) {
@@ -158,6 +238,60 @@ const make_yardstick = (rhythm: SolRhythm) => {
     toggle_playback_playing() {
       solsido.user_click()
       _playback.playing = !_playback.playing
+    }
+  }
+}
+
+const make_hit  = (rhythm: SolRhythm, _: number) => {
+
+  let _x = _
+
+  let m_style = createMemo(() => ({
+    left: `${_x * 48 * 4 * 100/(48 * 4 + 1)}%`
+  }))
+
+  return {
+    get x() {
+      return _x
+    },
+    get style() {
+      return m_style()
+    }
+  }
+}
+
+
+
+let colors = ['ghost', 'red', 'blue', 'green']
+const make_score  = (rhythm: SolRhythm, i: number, _: number) => {
+
+  let _i_score = createSignal(0)
+
+  let _x = _
+
+  let m_style = createMemo(() => ({
+    left: `${_x * 48 * 4 * 100/(48 * 4 + 1)}%`
+  }))
+
+  let m_klass = createMemo(() => [
+    colors[read(_i_score)]
+  ].join(' '))
+
+  return {
+    i,
+    get x() {
+      return _x
+    },
+    on_beat() {
+      owrite(_i_score, _ => _ === 0 ? 1 : _)
+    },
+    dispose_on_beat() {
+    },
+    get klass() {
+      return m_klass()
+    },
+    get style() {
+      return m_style()
     }
   }
 }

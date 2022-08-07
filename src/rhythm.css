@@ -53,10 +53,30 @@ yardstick {
 }
 
 yardstick sticks, 
-yardstick playback {
+yardstick playback,
+yardstick scores {
   position: absolute;
   width: 100%;
   height: 100%;
+}
+
+yardstick scores score,
+yardstick scores hit {
+  position: absolute;
+  top: 0;
+  width: calc(100% / (48 * 4 + 1));
+}
+
+yardstick scores hit {
+  height: 80%;
+  background: orange;
+  opacity: 0.9;
+}
+
+yardstick scores score {
+  height: 33%;
+  background: red;
+  opacity: 0.8;
 }
 
 yardstick playback cursor {
@@ -74,7 +94,7 @@ yardstick sticks {
 yardstick stick {
   position: relative;
   flex: 1;
-  height: 90%;
+  height: 50%;
 }
 
 yardstick stick:before {
@@ -101,4 +121,10 @@ yardstick stick.medium:before {
 yardstick stick.weak:before {
   height: 50%;
   opacity: 1;
+}
+
+
+yardstick scores score.ghost {
+  background: gray;
+  opacity: 0.8;
 }

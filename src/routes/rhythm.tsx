@@ -75,6 +75,14 @@ const Yardstick = props => {
         <cursor style={props.yardstick.cursor1_style}/>
         <cursor style={props.yardstick.cursor2_style}/>
       </playback>
+      <scores>
+        <For each={props.yardstick.hits}>{ hit =>
+          <hit style={hit.style}/>
+        }</For>
+        <For each={props.yardstick.scores}>{ score =>
+          <score class={score.klass} style={score.style}/>
+        }</For>
+      </scores>
       <sticks>
       <For each={props.yardstick.beats}>{beat =>
          <stick class={beat.klass}/>
