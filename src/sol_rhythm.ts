@@ -5,6 +5,7 @@ import { make_playback } from './make_playback'
 import { make_player } from './make_player'
 
 let bpms = [20, 30, 60, 90, 120, 180, 200, 400]
+let beats = [1, 2, 3, 4]
 
 export default class Sol_Rhythm {
 
@@ -113,6 +114,15 @@ const make_yardstick = (rhythm: SolRhythm) => {
   return {
     get cursor1_style() { return m_cursor1_style() },
     get cursor2_style() { return m_cursor2_style() },
+    set nb_beats(value: number) {
+      let _beats = beats.indexOf(read(_nb_beats)) + value + beats.length
+      _beats = Math.max(0, _beats) % beats.length
+
+      owrite(_nb_beats, beats[_beats])
+    },
+    get nb_beats() {
+      return read(_nb_beats)
+    },
     get beats() {
       return _beats
     },

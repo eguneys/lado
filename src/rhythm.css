@@ -2,15 +2,18 @@
   display: flex;
   user-select: none;
   cursor: pointer;
+  align-items: center;
 }
 
 .up-down span.value {
+  padding: 0.2em;
   background: #111;
   color: white;
 }
 
 .up-down span.value-up,
 .up-down span.value-down {
+  padding: 0.2em;
   background: #121212;
   color: white;
 }
@@ -18,6 +21,22 @@
 .main-staff {
   position: relative;
   aspect-ratio: 13/4;
+}
+
+
+metronome {
+  display: flex;
+  align-items: center;
+  justify-content: space-around;
+}
+
+metronome group {
+  display: flex;
+  align-items: center;
+  gap: 0.5em;
+}
+
+metronome label {
 }
 
 .yardstick-wrap {
