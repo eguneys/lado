@@ -28,7 +28,7 @@ const getPlayerController = async (input: boolean) => {
     let p = new SamplesPlayer(has_context.context)
     await p.init({
       srcs,
-      base_url: 'assets/audio/'
+      base_url: './assets/audio/'
     })
     return p
   }
