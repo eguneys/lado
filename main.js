@@ -5724,7 +5724,7 @@ var Lado = (function () {
       let p = new SamplesPlayer(has_context.context);
       await p.init({
         srcs,
-        base_url: 'assets/audio/'
+        base_url: './assets/audio/'
       });
       return p;
     }
