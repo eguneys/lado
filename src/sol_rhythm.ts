@@ -13,6 +13,20 @@ function on_interval(life: number, life0: number, t: number) {
   return Math.floor(life0 / t) !== Math.floor(life / t)
 }
 
+
+function min_index(arr: Array<number| undefined>) {
+  let i = -1
+  let _
+
+  arr.forEach((__, _i) => {
+    if (__ !== undefined && (_ === undefined || __ < _)) {
+      _ = __;
+      i = _i
+    }
+  })
+  return i
+}
+
 export default class Sol_Rhythm {
 
 
@@ -90,6 +104,16 @@ const make_yardstick = (rhythm: SolRhythm) => {
     }
   })
 
+
+  let m_sub = createMemo(() => {
+    let beat_ms = _playback.bpm?.beat_ms
+
+    if (beat_ms) {
+      let [sub, ms, sub_i, subs] = beat_ms
+      return sub
+    }
+  })
+
   /*
   
    0 1 2 3
@@ -137,26 +161,6 @@ const make_yardstick = (rhythm: SolRhythm) => {
     adsr: { a: 0, d: 0.1, s: 0.05, r: 0.6 }
   }
 
-  createEffect(on(() => _playback.playing, p => {
-    if (p) {
-
-      let midi = make_midi({
-        just_ons(ons: Array<Note>) {
-          let { player } = solsido
-          ons.slice(-1).forEach(_ => player?.attack(synth, fuzzy_note(_)))
-          let nb_beats = read(_nb_beats)
-          write(_hits, _ => _.push(m_x() % nb_beats / nb_beats))
-        },
-        just_offs(offs: Array<Note>) {
-          let { player } = solsido
-          offs.forEach(_ => player?.release(fuzzy_note(_)))
-        }
-      })
-      onCleanup(() => {
-      })
-    }
-  }))
-
   let m_x0 = createMemo(on(m_x, (v, p) => {
     return p
   }))
@@ -171,31 +175,56 @@ const make_yardstick = (rhythm: SolRhythm) => {
     return p
   })
 
-  createEffect(on(m_on_beat, () => {
-    owrite(_hits, [])
-  }))
 
+  let _scores = createMemo(() => {
+    let nb_beats = read(_nb_beats)
 
-  let _scores = createSignal([], { equals: false })
+    return [
+      ...[...Array(nb_beats).keys()].map(_ => _/nb_beats),
+      1
+    ]
+  })
   let m_scores = createMemo(() => read(_scores).map((_, i) => make_score(rhythm, i, _)))
 
-  let _next_scores = [[0, 0.5]]
-  const next_scores = () => {
-    return _next_scores.pop()
-  }
+  createEffect(on(m_sub, (sub) => {
+    
+    let nb_beats = read(_nb_beats)
+    let hit = m_x() % nb_beats / nb_beats
 
-  createEffect(on(m_on_beat, v => {
-    if (v !== undefined) {
-      let scores = m_scores()
-      let hits = m_hits()
-      scores.forEach(_ => _.on_beat())
-      if (read(_scores).length === 0) {
-        owrite(_scores, next_scores())
-      }
+    let i = min_index(m_scores().map(_ => -_.hit_distance(hit)))
+
+    if (i >= 0) {
+      m_scores()[i].hit = false
+    }
+
+  }))
+
+  createEffect(on(() => _playback.playing, p => {
+    if (p) {
+
+      let midi = make_midi({
+        just_ons(ons: Array<Note>) {
+          let { player } = solsido
+          ons.slice(-1).forEach(_ => player?.attack(synth, fuzzy_note(_)))
+          let nb_beats = read(_nb_beats)
+          let hit = m_x() % nb_beats / nb_beats
+          write(_hits, _ => _.push(hit))
 
 
-      scores,
-      hits
+          let i = min_index(m_scores().map(_ => _.hit_distance(hit)))
+
+          if (i >= 0) {
+            m_scores()[i].hit = true
+          }
+
+        },
+        just_offs(offs: Array<Note>) {
+          let { player } = solsido
+          offs.forEach(_ => player?.release(fuzzy_note(_)))
+        }
+      })
+      onCleanup(() => {
+      })
     }
   }))
 
@@ -262,7 +291,6 @@ const make_hit  = (rhythm: SolRhythm, _: number) => {
 
 
 
-let colors = ['ghost', 'red', 'blue', 'green']
 const make_score  = (rhythm: SolRhythm, i: number, _: number) => {
 
   let _i_score = createSignal(0)
@@ -273,11 +301,23 @@ const make_score  = (rhythm: SolRhythm, i: number, _: number) => {
     left: `${_x * 48 * 4 * 100/(48 * 4 + 1)}%`
   }))
 
+  let _hit = createSignal(false)
+
   let m_klass = createMemo(() => [
-    colors[read(_i_score)]
+    read(_hit) ? 'hit': ''
   ].join(' '))
 
+
   return {
+    hit_distance(x: number) {
+      return Math.abs(x - _x)
+    },
+    get hit() {
+      return read(_hit)
+    },
+    set hit(v: boolean) {
+      owrite(_hit, v)
+    },
     i,
     get x() {
       return _x

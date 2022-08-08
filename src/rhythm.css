@@ -73,12 +73,6 @@ yardstick scores hit {
   opacity: 0.9;
 }
 
-yardstick scores score {
-  height: 33%;
-  background: red;
-  opacity: 0.8;
-}
-
 yardstick playback cursor {
   position: absolute;
   height: 100%;
@@ -123,8 +117,14 @@ yardstick stick.weak:before {
   opacity: 1;
 }
 
-
-yardstick scores score.ghost {
-  background: gray;
+yardstick scores score {
+  height: 33%;
+  background: red;
   opacity: 0.8;
+}
+
+yardstick scores score.hit {
+  opacity: 1;
+  background: green;
+  box-shadow: 0px 0px 1px 1px lightgreen;
 }
