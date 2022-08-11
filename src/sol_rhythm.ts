@@ -77,7 +77,7 @@ const make_yardstick = (rhythm: SolRhythm) => {
 
   _m_up_player.synth = {
     wave: 'sine', 
-    volume: 1, 
+    volume: 0.2, 
     cutoff: 0.2, 
     cutoff_max: 0.4, 
     amplitude: 1, 
@@ -86,7 +86,7 @@ const make_yardstick = (rhythm: SolRhythm) => {
   }
   _m_down_player.synth = {
     wave: 'sine', 
-    volume: 1, 
+    volume: 0.2, 
     cutoff: 0.2, 
     cutoff_max: 0.4, 
     amplitude: 1, 
@@ -158,7 +158,7 @@ const make_yardstick = (rhythm: SolRhythm) => {
   let m_hits = createMemo(() => read(_hits).map(_ => make_hit(rhythm, _)))
 
   let synth = {
-    adsr: { a: 0, d: 0.1, s: 0.05, r: 0.6 }
+    adsr: { a: 0, d: 0.1, s: 0.2, r: 0.6 }
   }
 
   let m_x0 = createMemo(on(m_x, (v, p) => {
@@ -250,7 +250,7 @@ const make_yardstick = (rhythm: SolRhythm) => {
       return _beats
     },
     get bpm() {
-      return m_bpm()
+      return m_bpm() || 120
     },
     set bpm(value: number) {
       if (!_playback.bpm) {

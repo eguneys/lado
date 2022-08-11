@@ -21,7 +21,13 @@ export const Rhythm = props => {
 const RExercises = props => {
   return (<div class='rhythm-exercises'>
     <h2> Yardstick Exercise </h2>
-    <div class='yardstick-controls'>
+    <section class='box'>
+      <p>This is 1 measure of music.</p>
+      <p>Play the major scales using your MIDI keyboard. </p>
+      <p>Click play to start the metronome</p>
+      <p>You can adjust the tempo and number of beats</p>
+    </section>
+    <div class='box yardstick-controls'>
       <Metronome 
     toggle_play={() => props.exercises.yardstick.toggle_playback_playing()}
     play_mode={props.exercises.yardstick.playback_playing}
