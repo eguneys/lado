@@ -37,14 +37,15 @@ export default class Sol_Key {
   }
 }
 
-function shuffleArr (array){
+export function shuffleArr (array){
   for (var i = array.length - 1; i > 0; i--) {
     var rand = Math.floor(Math.random() * (i + 1));
     [array[i], array[rand]] = [array[rand], array[i]]
   }
+  return array
 }
 
-const make_next_key = (order: Order, nb: Nb) => {
+export const make_next_key = (order: Order, nb: Nb) => {
 
   let perfects = [[...perfect_c_sharps, ...perfect_c_flats.slice(1, 8)],
     perfect_c_sharps,

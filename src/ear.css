@@ -1,0 +1,23 @@
+.ear-exercises .major-staff {
+  position: relative;
+  aspect-ratio: 13/4;
+}
+
+.ear-exercises .major-staff .correct {
+  position: absolute;
+  color: #eee;
+  top: 50%;
+  left: 50%;
+  font-size: 3em;
+  transform: translate(-50%, -50%);
+  text-shadow: 0 2px 2px black;
+  animation: fade-in 1s;
+  opacity: 0;
+}
+
+
+@keyframes fade-in {
+  0% { opacity: 0.2; }
+  50% { opacity: 1; }
+  100% { opacity: 0; }
+}

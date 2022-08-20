@@ -23,7 +23,7 @@ const checkeds = () => {
 
 
 
-function format_time(n: number) {
+export function format_time(n: number) {
   var sec_num = parseInt(n, 10);
   var minutes = Math.floor(sec_num / 60);
   var seconds = sec_num - minutes * 60;

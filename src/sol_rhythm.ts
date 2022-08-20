@@ -200,9 +200,10 @@ const make_yardstick = (rhythm: SolRhythm) => {
   }))
 
   createEffect(on(() => _playback.playing, p => {
+    let midi
     if (p) {
 
-      let midi = make_midi({
+      midi = make_midi({
         just_ons(ons: Array<Note>) {
           let { player } = solsido
           ons.slice(-1).forEach(_ => player?.attack(synth, fuzzy_note(_)))
@@ -223,9 +224,10 @@ const make_yardstick = (rhythm: SolRhythm) => {
           offs.forEach(_ => player?.release(fuzzy_note(_)))
         }
       })
-      onCleanup(() => {
-      })
     }
+    onCleanup(() => {
+      midi?.dispose()
+    })
   }))
 
   return {

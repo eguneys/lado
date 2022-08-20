@@ -3,6 +3,7 @@ import { useLocation, Router, Routes, Route, Link, NavLink } from '@solidjs/rout
 import { Home } from './routes/home'
 import { Key } from './routes/key'
 import { Rhythm } from './routes/rhythm'
+import { Ear } from './routes/ear'
 import { useSolsido, SolsidoProvider } from './providers'
 import { hashIntegration } from '@solidjs/router'
 
@@ -45,6 +46,7 @@ const App = props => {
           <section><Link href="/"> lasolsido.org </Link></section>
           <section> <NavLink href="/rhythm">Rhythm</NavLink> </section>
           <section> <NavLink href="/key">Key Signatures</NavLink> </section>
+          <section> <NavLink href="/ear">Ear</NavLink> </section>
           
         </nav>
         <h1 class='site-title'>
@@ -56,6 +58,7 @@ const App = props => {
           <Route path="" component={Home}/>
           <Route path="key" component={Key}/>
           <Route path="rhythm" component={Rhythm}/>
+          <Route path="ear" component={Ear}/>
         </Routes>
       </div>
       </solsido>

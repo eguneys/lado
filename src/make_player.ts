@@ -55,6 +55,4 @@ export const make_player = (m_player: Memo<PlayerController>, playback: Playback
       owrite(_synth, synth)
     }
   }
-
-
 }

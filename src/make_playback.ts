@@ -7,9 +7,11 @@ export const make_playback = (m_nb_beats: Memo<number>, m_notes: Memo<NoteMs>) =
 
   let _playing = createSignal(false)
 
+  let _bpm = createSignal(120)
+
   let m_bpm = createMemo(() => {
     if (read(_playing)) {
-      return make_bpm(m_nb_beats(), 120)
+      return make_bpm(m_nb_beats(), read(_bpm))
     }
   })
 
@@ -31,10 +33,7 @@ export const make_playback = (m_nb_beats: Memo<number>, m_notes: Memo<NoteMs>) =
       return m_bpm()
     },
     set bpm(bpm: number) {
-      let _bpm = m_bpm()
-      if (_bpm) {
-        _bpm.bpm = bpm
-      }
+      owrite(_bpm, bpm)
     },
     set playing(v: boolean) {
       owrite(_playing, v)
@@ -53,7 +52,7 @@ export const make_bpm = (nb_beats: number, bpm: number = 120) => {
 
   let _ms_per_sub = createMemo(() => read(_ms_per_beat) / read(_subs))
 
-  let _sub = createSignal(-4 * nb_beats - 1)
+  let _sub = createSignal(-2 * nb_beats - 1)
   let _lookahead_ms = 20
 
   let _t = createSignal(_lookahead_ms)
