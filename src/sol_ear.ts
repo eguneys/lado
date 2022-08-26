@@ -102,7 +102,7 @@ const _make_playback = (ear: Sol_Ear) => {
   }))
 
 
-  let m_time_score = createMemo(() => _playback.playing ? make_time_score(0): undefined)
+  let m_time_score = createMemo(() => _playback.playing ? make_time_score(1): undefined)
 
   createEffect(on(m_correct, c => {
     let _time_score = m_time_score()
